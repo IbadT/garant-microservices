@@ -1,0 +1,26 @@
+syntax = "proto3";
+
+package deal;
+
+service DealService {
+  rpc CreateDeal (CreateDealRequest) returns (DealResponse);
+  rpc AcceptDeal (AcceptDealRequest) returns (DealResponse);
+  rpc CancelDeal (CancelDealRequest) returns (DealResponse);
+  rpc ConfirmCompletion (ConfirmCompletionRequest) returns (DealResponse);
+  rpc OpenDispute (OpenDisputeRequest) returns (DisputeResponse);
+}
+
+message CreateDealRequest {
+  string initiator_id = 1;
+  string target_id = 2;
+  double amount = 3;
+  string description = 4;
+  bool is_customer_initiator = 5;
+}
+
+message AcceptDealRequest {
+  string deal_id = 1;
+  string user_id = 2;
+}
+
+// Остальные сообщения...
