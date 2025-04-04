@@ -7,8 +7,20 @@ service DealService {
   rpc AcceptDeal (AcceptDealRequest) returns (DealResponse);
   rpc CancelDeal (CancelDealRequest) returns (DealResponse);
   rpc ConfirmCompletion (ConfirmCompletionRequest) returns (DealResponse);
-  rpc OpenDispute (OpenDisputeRequest) returns (DisputeResponse);
+  // rpc OpenDispute (OpenDisputeRequest) returns (DisputeResponse);
+  //
+  rpc SendHello (SendHelloRequest) returns (SendHelloResponse);
 }
+
+message SendHelloRequest {
+  string message = 1;
+}
+
+message SendHelloResponse {
+  string message = 1;
+}
+
+// 
 
 message CreateDealRequest {
   string initiator_id = 1;
@@ -30,3 +42,20 @@ message DealResponse {
 }
 
 // Остальные сообщения...
+
+message CancelDealRequest {
+  string deal_id = 1;
+  string user_id = 2;
+  string reason = 3;
+}
+
+message ConfirmCompletionRequest {
+  string deal_id = 1;
+  string user_id = 2;
+}
+
+message OpenDisputeRequest {
+  string deal_id = 1;
+  string user_id = 2;
+  string reason = 3;
+}

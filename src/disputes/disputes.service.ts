@@ -22,6 +22,10 @@ export class DisputesService {
     return this.prisma.$transaction(async (tx) => {
       const deal = await tx.deal.findUnique({ where: { id: dealId } });
       
+      if (!deal) {
+        throw new Error('Deal not found');
+      }
+      
       // Проверка прав
       if (deal.customer_id !== userId && deal.vendor_id !== userId) {
         throw new Error('Not a participant');

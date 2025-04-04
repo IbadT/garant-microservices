@@ -19,12 +19,11 @@ async function bootstrap() {
   
   app.enableCors({
     origin: "*",
-    credentioals: true,
+    credentials: true,
   });
 
-
   const configService = app.get(ConfigService);
-  const PORT = configService.get<string>("PORT");
+  const PORT = configService.get<string>("PORT") ?? 3000;
   const NODE_ENV = configService.get<string>("NODE_ENV");
   const GRPC_URL = configService.get<string>("GRPC_URL");
   const KAFKA_BROKER = configService.get<string>("KAFKA_BROKER");
@@ -47,12 +46,16 @@ async function bootstrap() {
     )
     .build();
 
+  const PROTO_PATH = join(process.cwd(), "dist/proto/proto/deal.proto");
+  // const PROTO_PATH = join(__dirname, "proto/deal.proto");
+
+
   app.connectMicroservice<MicroserviceOptions>({
     transport: Transport.GRPC,
     options: {
       url: GRPC_URL,
       package: "deal",
-      protoPath: join(__dirname, "proto/deal.proto")
+      protoPath: PROTO_PATH
     }
   });
 
@@ -68,7 +71,7 @@ async function bootstrap() {
   //   },
   // });
 
-  app.useWebSocketAdapter(new WsAdapter)
+  // app.useWebSocketAdapter(new WsAdapter(app));
 
   const swaggerDocument = SwaggerModule.createDocument(app, swaggerConfig);
   if (NODE_ENV !== 'production') {
@@ -76,14 +79,16 @@ async function bootstrap() {
   };
 
   await app.startAllMicroservices();
-  await app.listen(PORT ?? 3000);
+  await app.listen(PORT);
+
+  logger.log(`Application is running on: ${await app.getUrl()}`);
+  logger.log(`Environment: ${NODE_ENV}`);
+  logger.log(`Swagger documentation is available at: ${await app.getUrl()}/api/docs`);
 
   if(module.hot) {
     module.hot.accept();
     module.hot.dispose(() => app.close());
   };
-
-  logger.log(`Приложение запущено на порту ${PORT ?? 3000}`);
-};
+}
 
 bootstrap();
