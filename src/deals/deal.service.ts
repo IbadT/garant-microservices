@@ -32,6 +32,9 @@ export class DealService implements OnModuleInit {
   ) {}
 
   async onModuleInit() {
+    // Сначала подключаемся к Kafka
+    await this.kafka.connect();
+    // Затем подписываемся на обновления
     await this.kafka.subscribeToDealUpdates(this.handleDealUpdate.bind(this));
   }
 

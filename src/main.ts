@@ -7,6 +7,10 @@ import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
 import { MicroserviceOptions, Transport } from "@nestjs/microservices";
 import { join } from "path";
 import { WsAdapter } from '@nestjs/platform-ws';
+import { initSentry, captureUnhandledExceptions } from './helpers/instrument';
+import { SentryExceptionFilter } from './filters/sentry-exception.filter';
+import { PrismaExceptionFilter } from './filters/prisma-exception.filter';
+
 
 declare const module: any;
 
@@ -15,6 +19,11 @@ async function bootstrap() {
   
   const app = await NestFactory.create(AppModule);
   
+  app.useGlobalFilters(
+    new SentryExceptionFilter(),
+    new PrismaExceptionFilter(),
+  );
+
   app.setGlobalPrefix("api");
   
   app.enableCors({
@@ -27,6 +36,7 @@ async function bootstrap() {
   const NODE_ENV = configService.get<string>("NODE_ENV");
   const GRPC_URL = configService.get<string>("GRPC_URL");
   const KAFKA_BROKER = configService.get<string>("KAFKA_BROKER");
+  const SENTRY_DNS = configService.get<string>("SENTRY_DNS");
 
   const swaggerConfig = new DocumentBuilder()
     .setTitle("Garant documentation")
@@ -46,8 +56,16 @@ async function bootstrap() {
     )
     .build();
 
-  const PROTO_PATH = join(process.cwd(), "dist/proto/proto/deal.proto");
+  const swaggerDocument = SwaggerModule.createDocument(app, swaggerConfig);
+  if (NODE_ENV !== 'production') {
+    SwaggerModule.setup('api', app, swaggerDocument);
+  };
+  
+  // Инициализация Sentry
+  initSentry(SENTRY_DNS);
 
+  const PROTO_PATH = join(process.cwd(), "dist/proto/proto/deal.proto");
+  
 
   app.connectMicroservice<MicroserviceOptions>({
     transport: Transport.GRPC,
@@ -72,10 +90,7 @@ async function bootstrap() {
 
   // app.useWebSocketAdapter(new WsAdapter(app));
 
-  const swaggerDocument = SwaggerModule.createDocument(app, swaggerConfig);
-  if (NODE_ENV !== 'production') {
-    SwaggerModule.setup('api', app, swaggerDocument);
-  };
+
 
   await app.startAllMicroservices();
   await app.listen(PORT);

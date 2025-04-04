@@ -12,14 +12,19 @@ import { ConfigModule, ConfigService } from "@nestjs/config";
 
 @Module({
     imports: [
-        ClientsModule.register([
+        ClientsModule.registerAsync([
             {
-                name: "DEALS_PACKAGE",
-                transport: Transport.GRPC,
-                options: {
-                    package: "deal",
-                    protoPath: join(process.cwd(), "dist/proto/proto/deal.proto")
-                }
+                name: "DEAL_PACKAGE",
+                imports: [ConfigModule],
+                useFactory: async (configService: ConfigService) => ({
+                    transport: Transport.GRPC,
+                    options: {
+                        url: configService.get<string>("GRPC_URL"),
+                        package: "deal",
+                        protoPath: join(process.cwd(), "src/proto/deal.proto"),
+                    },
+                }),
+                inject: [ConfigService],
             }
         ]),
         JwtModule.registerAsync({
