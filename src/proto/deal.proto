@@ -23,4 +23,10 @@ message AcceptDealRequest {
   string user_id = 2;
 }
 
+message DealResponse {
+  string id = 1;
+  string status = 2;
+  string message = 3;
+}
+
 // Остальные сообщения...

@@ -1,23 +1,20 @@
 import { Injectable } from '@nestjs/common';
 import { CreateDisputeDto } from './dto/create-dispute.dto';
 import { UpdateDisputeDto } from './dto/update-dispute.dto';
+import { PrismaService } from 'src/prisma.service';
 
 @Injectable()
 export class DisputesService {
-  create(createDisputeDto: CreateDisputeDto) {
-    return 'This action adds a new dispute';
-  }
 
-  findAll() {
-    return `This action returns all disputes`;
-  }
 
-  findOne(id: number) {
-    return `This action returns a #${id} dispute`;
-  }
+  constructor(private prisma: PrismaService) {} // Добавлен PrismaService
 
-  update(id: number, updateDisputeDto: UpdateDisputeDto) {
-    return `This action updates a #${id} dispute`;
+  async deleteDispute(id: string) {
+    return this.prisma.$transaction(async (tx) => {
+      return tx.dispute.delete({
+        where: { id },
+      });
+    });
   }
 
   // пример метода для открытого спора

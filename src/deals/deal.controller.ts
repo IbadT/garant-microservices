@@ -1,6 +1,7 @@
 import { Controller } from '@nestjs/common';
 import { GrpcMethod } from '@nestjs/microservices';
 import { DealService } from './deal.service';
+import { CreateDealRequest } from './dto/deal.dto';
 
 @Controller()
 export class DealController {

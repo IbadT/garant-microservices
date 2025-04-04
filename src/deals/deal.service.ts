@@ -1,8 +1,32 @@
-import { Injectable, OnModuleInit } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
+import { BadRequestException, Injectable, OnModuleInit } from '@nestjs/common';
+import { PrismaService } from 'src/prisma.service';
 import { KafkaService } from '../kafka/kafka.service';
-import { NotificationService } from '../notifications/notification.service';
-import { DealStatus, DealInitiator, Prisma } from '@prisma/client';
+import { NotificationService } from 'src/notifications/notification.service';
+import { CreateDealRequest } from './dto/deal.dto';
+
+
+
+enum DealStatus {
+  PENDING,
+  ACTIVE,
+  COMPLETED,
+  CANCELLED,
+  DECLINED,
+  DISPUTED,
+}
+
+enum DealInitiator {
+  CUSTOMER,
+  VENDOR
+}
+
+// enum DisputeStatus {
+//   PENDING,
+//   RESOLVED,
+// }
+
+
+
 
 @Injectable()
 export class DealService implements OnModuleInit {
@@ -20,15 +44,17 @@ export class DealService implements OnModuleInit {
     // Обработка событий из Kafka
   }
 
-  async createDeal(data: {
-    initiatorId: string;
-    targetId: string;
-    amount: number;
-    description: string;
-    isCustomerInitiator: boolean;
-  }) {
+  // async createDeal(data: {
+  //   initiatorId: string;
+  //   targetId: string;
+  //   amount: number;
+  //   description: string;
+  //   isCustomerInitiator: boolean;
+  // }) {
+  async createDeal(data: any) { // !!!!!!!!!!!!!!!!!!!!!!!!!!!!! ИЗМЕНИТЬ
     return this.prisma.$transaction(async (tx) => {
       // Проверка баланса инициатора
+      // Проверка баланса и резервирование средств
       if (data.isCustomerInitiator) {
         await this.validateAndReserveFunds(data.initiatorId, data.amount, tx);
       }
@@ -59,6 +85,73 @@ export class DealService implements OnModuleInit {
     });
   }
 
+
+
+
+
+  private async validateAndReserveFunds(userId: string, amount: number, prismaTx?: any) {
+    const tx = prismaTx || this.prisma;
+    
+    const user = await tx.user.findUnique({
+      where: { id: userId },
+      select: { balance: true, reserved_balance: true },
+    });
+
+    if (!user) {
+      throw new BadRequestException('User not found');
+    }
+
+    const availableBalance = user.balance - user.reserved_balance;
+    if (availableBalance < amount) {
+      throw new BadRequestException('Insufficient funds');
+    }
+
+    await tx.user.update({
+      where: { id: userId },
+      data: { reserved_balance: { increment: amount } },
+    });
+  }
+
+
+  private validateDealAction(deal: any, userId: string, action: string) {
+    if (!deal) {
+      throw new BadRequestException('Deal not found');
+    }
+
+    const isCustomer = deal.customer_id === userId;
+    const isVendor = deal.vendor_id === userId;
+
+    if (!isCustomer && !isVendor) {
+      throw new BadRequestException('Not a participant of this deal');
+    }
+
+    switch (action) {
+      case 'ACCEPT':
+        if (deal.status !== 'PENDING') {
+          throw new BadRequestException('Deal is not in pending state');
+        }
+        if ((deal.initiator === 'CUSTOMER' && !isVendor) || 
+            (deal.initiator === 'VENDOR' && !isCustomer)) {
+          throw new BadRequestException('Only counterparty can accept this deal');
+        }
+        break;
+      
+      case 'CANCEL':
+        if (deal.status === 'COMPLETED' || deal.status === 'CANCELLED') {
+          throw new BadRequestException(`Cannot cancel deal in ${deal.status} state`);
+        }
+        if (![deal.customer_id, deal.vendor_id].includes(userId)) {
+          throw new BadRequestException('Not authorized to cancel this deal');
+        }
+        break;
+      
+      // Другие валидации по необходимости
+    }
+  };
+
+
+
+  
   async acceptDeal(dealId: string, userId: string) {
     return this.prisma.$transaction(async (tx) => {
       const deal = await tx.deal.findUnique({ where: { id: dealId } });
