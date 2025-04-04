@@ -24,10 +24,13 @@ Before you begin, ensure you have the following installed:
 ├── src/
 │   ├── main.ts
 │   ├── app.module.ts
+│   ├── test-grpc.ts
 │   └── proto/
 │       └── garant.proto
 ├── Dockerfile
 ├── docker-compose.yml
+├── docker-compose.db.yml
+├── docker-compose.kafka.yml
 ├── Makefile
 └── package.json
 ```
@@ -47,7 +50,17 @@ cd garant-microservices
 make dev-setup
 ```
 
-3. Start the application in development mode:
+3. Start the PostgreSQL database:
+```bash
+make db-up
+```
+
+4. Start Kafka and Zookeeper:
+```bash
+make kafka-up
+```
+
+5. Start the application in development mode:
 ```bash
 make run
 ```
@@ -55,6 +68,22 @@ make run
 The application will be available at:
 - HTTP API: http://localhost:4200
 - gRPC: localhost:50051
+
+### Testing gRPC Client
+
+To test the gRPC communication:
+
+1. Make sure the main application is running:
+```bash
+make run
+```
+
+2. In a new terminal, run the gRPC test client:
+```bash
+make test-grpc
+```
+
+The test client will send a request to the gRPC server and display the response.
 
 ### Docker Setup
 
@@ -93,14 +122,36 @@ make proto-watch
 
 ### Database Management
 
-1. Generate Prisma client:
+1. Start the PostgreSQL database:
+```bash
+make db-up
+```
+
+2. Stop the PostgreSQL database:
+```bash
+make db-down
+```
+
+3. Generate Prisma client:
 ```bash
 make db-generate
 ```
 
-2. Run database migrations:
+4. Run database migrations:
 ```bash
 make db-migrate
+```
+
+### Kafka Management
+
+1. Start Kafka and Zookeeper:
+```bash
+make kafka-up
+```
+
+2. Stop Kafka and Zookeeper:
+```bash
+make kafka-down
 ```
 
 ## Available Make Commands
@@ -110,11 +161,16 @@ make db-migrate
 - `make run` - Run the application in development mode
 - `make test` - Run tests
 - `make test-cov` - Run tests with coverage
+- `make test-grpc` - Run gRPC test client
 - `make clean` - Clean build artifacts
 - `make docker-build` - Build Docker containers
 - `make docker-up` - Start Docker containers
 - `make docker-down` - Stop Docker containers
 - `make docker-logs` - View Docker container logs
+- `make db-up` - Start PostgreSQL database
+- `make db-down` - Stop PostgreSQL database
+- `make kafka-up` - Start Kafka and Zookeeper
+- `make kafka-down` - Stop Kafka and Zookeeper
 - `make proto-gen` - Generate proto files
 - `make proto-watch` - Watch and generate proto files
 - `make lint` - Run linter
@@ -135,7 +191,10 @@ GRPC_PORT=50051
 NODE_ENV=development
 
 # Database
-DATABASE_URL="postgresql://user:password@localhost:5432/garant?schema=public"
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/garant?schema=public"
+
+# Kafka
+KAFKA_BROKER="localhost:29092"
 ```
 
 ## Testing

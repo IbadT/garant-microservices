@@ -47,7 +47,6 @@ async function bootstrap() {
     .build();
 
   const PROTO_PATH = join(process.cwd(), "dist/proto/proto/deal.proto");
-  // const PROTO_PATH = join(__dirname, "proto/deal.proto");
 
 
   app.connectMicroservice<MicroserviceOptions>({

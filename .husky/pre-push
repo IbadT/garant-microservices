@@ -1,0 +1,12 @@
+#!/bin/sh
+. "$(dirname "$0")/_/husky.sh"
+
+echo "Running pre-push hooks..."
+
+# Запуск тестов
+echo "Running tests..."
+npm run test
+
+# Проверка сборки
+echo "Checking build..."
+npm run build 

@@ -1,0 +1,19 @@
+#!/bin/sh
+. "$(dirname "$0")/_/husky.sh"
+
+echo "Running pre-commit hooks..."
+
+# Запуск линтера
+echo "Running linter..."
+npm run lint
+
+# Запуск форматтера
+echo "Running formatter..."
+npm run format
+
+# Генерация proto файлов
+echo "Generating proto files..."
+npm run proto:gen
+
+# Добавление измененных файлов в коммит
+git add . 

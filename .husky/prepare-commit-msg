@@ -1,0 +1,18 @@
+#!/bin/sh
+. "$(dirname "$0")/_/husky.sh"
+
+# Получение текущей ветки
+branch_name=$(git symbolic-ref --short HEAD)
+
+# Проверка, содержит ли имя ветки номер задачи (например, feature/JIRA-123)
+if echo "$branch_name" | grep -qE '^[a-z]+/[A-Z]+-[0-9]+'; then
+  # Извлечение номера задачи
+  task_id=$(echo "$branch_name" | grep -oE '[A-Z]+-[0-9]+')
+  
+  # Проверка, содержит ли сообщение коммита уже номер задачи
+  if ! grep -q "$task_id" "$1"; then
+    # Добавление номера задачи в начало сообщения коммита
+    sed -i.bak -e "1s/^/$task_id: /" "$1"
+    rm -f "$1.bak"
+  fi
+fi 

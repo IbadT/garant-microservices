@@ -1,4 +1,4 @@
-.PHONY: build run test clean docker-build docker-up docker-down docker-logs proto-gen proto-watch install lint format
+.PHONY: build run test clean docker-build docker-up docker-down docker-logs proto-gen proto-watch install lint format test-grpc db-up db-down kafka-up kafka-down
 
 # Default target
 all: install build
@@ -13,7 +13,7 @@ build:
 
 # Run the application in development mode
 run:
-	npm run dev
+	npx concurrently "npm run start:dev" "npm run proto:watch"
 
 # Run tests
 test:
@@ -22,6 +22,10 @@ test:
 # Run tests with coverage
 test-cov:
 	npm run test:cov
+
+# Run gRPC test client
+test-grpc:
+	npx ts-node src/test-grpc.ts
 
 # Clean build artifacts
 clean:
@@ -41,6 +45,20 @@ docker-down:
 
 docker-logs:
 	docker-compose logs -f
+
+# Database commands
+db-up:
+	docker compose -f docker-compose.db.yml up -d
+
+db-down:
+	docker compose -f docker-compose.db.yml down
+
+# Kafka commands
+kafka-up:
+	docker compose -f docker-compose.kafka.yml up -d
+
+kafka-down:
+	docker compose -f docker-compose.kafka.yml down
 
 # Proto commands
 proto-gen:
@@ -77,11 +95,16 @@ help:
 	@echo "  make run          - Run the application in development mode"
 	@echo "  make test         - Run tests"
 	@echo "  make test-cov     - Run tests with coverage"
+	@echo "  make test-grpc    - Run gRPC test client"
 	@echo "  make clean        - Clean build artifacts"
 	@echo "  make docker-build - Build Docker containers"
 	@echo "  make docker-up    - Start Docker containers"
 	@echo "  make docker-down  - Stop Docker containers"
 	@echo "  make docker-logs  - View Docker container logs"
+	@echo "  make db-up        - Start PostgreSQL database"
+	@echo "  make db-down      - Stop PostgreSQL database"
+	@echo "  make kafka-up     - Start Kafka and Zookeeper"
+	@echo "  make kafka-down   - Stop Kafka and Zookeeper"
 	@echo "  make proto-gen    - Generate proto files"
 	@echo "  make proto-watch  - Watch and generate proto files"
 	@echo "  make lint         - Run linter"
