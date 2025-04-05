@@ -5,6 +5,9 @@ import { AppService } from './app.service';
 import { DisputesModule } from './disputes/disputes.module';
 import { DealModule } from './deals/deal.module';
 import { ConfigModule } from '@nestjs/config';
+import { SentryGlobalFilter } from '@sentry/nestjs/setup';
+import { APP_FILTER } from '@nestjs/core';
+
 
 @Module({
   imports: [
@@ -17,7 +20,11 @@ import { ConfigModule } from '@nestjs/config';
   ],
   controllers: [AppController],
   providers: [
-    AppService
+    AppService,
+    {
+      provide: APP_FILTER,
+      useClass: SentryGlobalFilter,
+    },
   ],
 })
 export class AppModule {}

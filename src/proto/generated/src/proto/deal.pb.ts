@@ -32,6 +32,11 @@ export interface AcceptDealRequest {
   userId: string;
 }
 
+export interface DeclineDealRequest {
+  dealId: string;
+  userId: string;
+}
+
 export interface DealResponse {
   id: string;
   status: string;
@@ -41,7 +46,6 @@ export interface DealResponse {
 export interface CancelDealRequest {
   dealId: string;
   userId: string;
-  reason: string;
 }
 
 export interface ConfirmCompletionRequest {
@@ -55,6 +59,61 @@ export interface OpenDisputeRequest {
   reason: string;
 }
 
+export interface ResolveDisputeRequest {
+  dealId: string;
+  disputeId: string;
+  resolution: string;
+  moderatorId: string;
+}
+
+export interface GetActiveDealsRequest {
+  userId: string;
+}
+
+export interface GetActiveDealsResponse {
+  deals: Deal[];
+}
+
+export interface GetDealByIdRequest {
+  dealId: string;
+}
+
+export interface GetDealByIdResponse {
+  deal: Deal | undefined;
+}
+
+export interface Deal {
+  id: string;
+  customerId: string;
+  vendorId: string;
+  amount: number;
+  description: string;
+  status: string;
+  initiator: string;
+  fundsReserved: boolean;
+  createdAt: string;
+  acceptedAt: string;
+  completedAt: string;
+  cancelledAt: string;
+  cancelledBy: string;
+  declinedAt: string;
+  declinedBy: string;
+  lastDispute: Dispute | undefined;
+}
+
+export interface Dispute {
+  id: string;
+  dealId: string;
+  openedBy: string;
+  openedByRole: string;
+  reason: string;
+  status: string;
+  resolvedAt: string;
+  resolution: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export const DEAL_PACKAGE_NAME = "deal";
 
 export interface DealServiceClient {
@@ -62,11 +121,19 @@ export interface DealServiceClient {
 
   acceptDeal(request: AcceptDealRequest, metadata?: Metadata): Observable<DealResponse>;
 
+  declineDeal(request: DeclineDealRequest, metadata?: Metadata): Observable<DealResponse>;
+
   cancelDeal(request: CancelDealRequest, metadata?: Metadata): Observable<DealResponse>;
 
   confirmCompletion(request: ConfirmCompletionRequest, metadata?: Metadata): Observable<DealResponse>;
 
-  /** rpc OpenDispute (OpenDisputeRequest) returns (DisputeResponse); */
+  openDispute(request: OpenDisputeRequest, metadata?: Metadata): Observable<DealResponse>;
+
+  resolveDispute(request: ResolveDisputeRequest, metadata?: Metadata): Observable<DealResponse>;
+
+  getActiveDeals(request: GetActiveDealsRequest, metadata?: Metadata): Observable<GetActiveDealsResponse>;
+
+  getDealById(request: GetDealByIdRequest, metadata?: Metadata): Observable<GetDealByIdResponse>;
 
   sendHello(request: SendHelloRequest, metadata?: Metadata): Observable<SendHelloResponse>;
 }
@@ -82,6 +149,11 @@ export interface DealServiceController {
     metadata?: Metadata,
   ): Promise<DealResponse> | Observable<DealResponse> | DealResponse;
 
+  declineDeal(
+    request: DeclineDealRequest,
+    metadata?: Metadata,
+  ): Promise<DealResponse> | Observable<DealResponse> | DealResponse;
+
   cancelDeal(
     request: CancelDealRequest,
     metadata?: Metadata,
@@ -92,7 +164,25 @@ export interface DealServiceController {
     metadata?: Metadata,
   ): Promise<DealResponse> | Observable<DealResponse> | DealResponse;
 
-  /** rpc OpenDispute (OpenDisputeRequest) returns (DisputeResponse); */
+  openDispute(
+    request: OpenDisputeRequest,
+    metadata?: Metadata,
+  ): Promise<DealResponse> | Observable<DealResponse> | DealResponse;
+
+  resolveDispute(
+    request: ResolveDisputeRequest,
+    metadata?: Metadata,
+  ): Promise<DealResponse> | Observable<DealResponse> | DealResponse;
+
+  getActiveDeals(
+    request: GetActiveDealsRequest,
+    metadata?: Metadata,
+  ): Promise<GetActiveDealsResponse> | Observable<GetActiveDealsResponse> | GetActiveDealsResponse;
+
+  getDealById(
+    request: GetDealByIdRequest,
+    metadata?: Metadata,
+  ): Promise<GetDealByIdResponse> | Observable<GetDealByIdResponse> | GetDealByIdResponse;
 
   sendHello(
     request: SendHelloRequest,
@@ -102,7 +192,18 @@ export interface DealServiceController {
 
 export function DealServiceControllerMethods() {
   return function (constructor: Function) {
-    const grpcMethods: string[] = ["createDeal", "acceptDeal", "cancelDeal", "confirmCompletion", "sendHello"];
+    const grpcMethods: string[] = [
+      "createDeal",
+      "acceptDeal",
+      "declineDeal",
+      "cancelDeal",
+      "confirmCompletion",
+      "openDispute",
+      "resolveDispute",
+      "getActiveDeals",
+      "getDealById",
+      "sendHello",
+    ];
     for (const method of grpcMethods) {
       const descriptor: any = Reflect.getOwnPropertyDescriptor(constructor.prototype, method);
       GrpcMethod("DealService", method)(constructor.prototype[method], method, descriptor);

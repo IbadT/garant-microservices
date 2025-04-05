@@ -6,7 +6,7 @@
   "private": true,
   "license": "UNLICENSED",
   "scripts": {
-    "build": "nest build && mkdir -p dist/proto && cp -r src/proto/*.proto dist/proto/",
+    "build": "nest build && mkdir -p dist/proto && cp -r src/proto/*.proto dist/proto/ && npm run sentry:sourcemaps",
     "proto:gen": "protoc --plugin=protoc-gen-ts_proto=./node_modules/.bin/protoc-gen-ts_proto --ts_proto_out=./src/proto/generated --ts_proto_opt=nestJs=true,fileSuffix=.pb,addGrpcMetadata=true --ts_proto_opt=esModuleInterop=true ./src/proto/deal.proto",
     "proto:watch": "nodemon --watch src/proto --ext proto --exec 'npm run proto:gen && npm run build'",
     "dev": "concurrently \"npm run start:dev\" \"npm run proto:watch\"",
@@ -21,7 +21,8 @@
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
-    "test:grpc": "ts-node test-grpc.ts"
+    "test:grpc": "ts-node test-grpc.ts",
+    "sentry:sourcemaps": "sentry-cli sourcemaps inject --org redev-tt --project node-nestjs ./dist && sentry-cli sourcemaps upload --org redev-tt --project node-nestjs ./dist"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",
@@ -36,6 +37,7 @@
     "@nestjs/swagger": "^11.1.0",
     "@nestjs/websockets": "^11.0.12",
     "@prisma/client": "^6.5.0",
+    "@sentry/cli": "^2.43.0",
     "@sentry/nestjs": "^9.10.1",
     "@sentry/profiling-node": "^9.10.1",
     "bcrypt": "^5.1.1",

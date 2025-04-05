@@ -31,6 +31,9 @@ export class DisputesService {
         throw new Error('Not a participant');
       }
   
+      // Определяем роль пользователя
+      const userRole = deal.customer_id === userId ? 'CUSTOMER' : 'VENDOR';
+  
       // Обновление статуса сделки
       await tx.deal.update({
         where: { id: dealId },
@@ -41,7 +44,8 @@ export class DisputesService {
       return tx.dispute.create({
         data: {
           deal_id: dealId,
-          opened_by: deal.customer_id === userId ? 'CUSTOMER' : 'VENDOR',
+          opened_by: userId,
+          opened_by_role: userRole,
           reason,
         },
       });

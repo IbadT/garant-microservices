@@ -8,6 +8,11 @@ export class AppController {
   private logger = new Logger('AppController');
   constructor(private readonly appService: AppService) {}
 
+  @Get("/debug-sentry")
+  getError() {
+    throw new Error("My first Sentry error!");
+  }
+
   @ApiOperation({ summary: 'Get hello message', description: 'Returns a hello message from the application' })
   @ApiResponse({ status: 200, description: 'Returns hello message' })
   @Get()

@@ -7,6 +7,23 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model User {
+  id               String    @id @default(uuid())
+  email            String    @unique
+  password_hash    String
+  role             UserRole
+  balance          Float     @default(0)
+  reserved_balance Float     @default(0)
+  created_at       DateTime  @default(now())
+  updated_at       DateTime  @updatedAt
+
+  // Связи с явными именами отношений
+  customer_deals Deal[]   @relation("CustomerDeals")
+  vendor_deals   Deal[]   @relation("VendorDeals")
+  authored_reviews Review[] @relation("AuthoredReviews")
+  target_reviews  Review[] @relation("TargetReviews")
+}
+
 model Deal {
   id             String      @id @default(uuid())
   customer_id    String
@@ -20,24 +37,57 @@ model Deal {
   accepted_at    DateTime?
   completed_at   DateTime?
   cancelled_at   DateTime?
-  cancelled_by   String?
+  cancelled_by   String?     // 'CUSTOMER' | 'VENDOR' | 'SYSTEM'
+  declined_at    DateTime?
+  declined_by    String?     // 'CUSTOMER' | 'VENDOR'
 
-  // customer    User     @relation("CustomerDeals", fields: [customer_id], references: [id])
-  // vendor      User     @relation("VendorDeals", fields: [vendor_id], references: [id])
-  disputes    Dispute[]
+  // Связи
+  customer User @relation("CustomerDeals", fields: [customer_id], references: [id])
+  vendor   User @relation("VendorDeals", fields: [vendor_id], references: [id])
+  disputes Dispute[]
+  reviews  Review[]
 }
 
 model Dispute {
   id           String        @id @default(uuid())
   deal_id      String
-  opened_by    String
+  opened_by    String        // ID пользователя, открывшего спор
+  opened_by_role String      // Роль пользователя, открывшего спор (CUSTOMER, VENDOR, etc.)
   reason       String
   status       DisputeStatus @default(PENDING)
   resolved_at  DateTime?
-  resolution   String?
+  resolution   String?       // 'CUSTOMER_WON' | 'VENDOR_WON'
   created_at   DateTime      @default(now())
+  updated_at   DateTime      @updatedAt
 
   deal Deal @relation(fields: [deal_id], references: [id])
+}
+
+model Review {
+  id          String   @id @default(uuid())
+  deal_id     String
+  author_id   String
+  target_id   String
+  rating      Int
+  comment     String?
+  created_at  DateTime @default(now())
+
+  // Явные имена отношений для User
+  deal    Deal @relation(fields: [deal_id], references: [id])
+  author  User @relation("AuthoredReviews", fields: [author_id], references: [id])
+  target  User @relation("TargetReviews", fields: [target_id], references: [id])
+
+  // Валидация рейтинга (добавляется через @map в миграции)
+  @@map("reviews")
+  @@index([deal_id])
+}
+
+// Enums
+enum UserRole {
+  CUSTOMER
+  VENDOR
+  ADMIN
+  MODERATOR
 }
 
 enum DealStatus {
@@ -58,123 +108,3 @@ enum DisputeStatus {
   PENDING
   RESOLVED
 }
-
-
-
-
-
-
-
-
-
-
-
-// generator client {
-//   provider = "prisma-client-js"
-// }
-
-// datasource db {
-//   provider = "postgresql"
-//   url      = env("DATABASE_URL")
-// }
-
-
-// // npx prisma migrate dev --name init
-
-// model User {
-//   id               String    @id @default(uuid())
-//   email            String    @unique
-//   password_hash    String
-//   role             UserRole
-//   balance          Float     @default(0)
-//   reserved_balance Float     @default(0)
-//   created_at       DateTime  @default(now())
-//   updated_at       DateTime  @updatedAt
-
-//   // Связи с явными именами отношений
-//   customer_deals Deal[]   @relation("CustomerDeals")
-//   vendor_deals   Deal[]   @relation("VendorDeals")
-//   authored_reviews Review[] @relation("AuthoredReviews")
-//   target_reviews  Review[] @relation("TargetReviews")
-// }
-
-// model Deal {
-//   id             String      @id @default(uuid())
-//   customer_id    String
-//   vendor_id      String
-//   amount         Float
-//   description    String
-//   status         DealStatus
-//   initiator      DealInitiator
-//   funds_reserved Boolean     @default(false)
-//   created_at     DateTime    @default(now())
-//   accepted_at    DateTime?
-//   completed_at   DateTime?
-//   cancelled_at   DateTime?
-//   cancelled_by   String?     // 'CUSTOMER' | 'VENDOR' | 'SYSTEM'
-
-//   // Связи
-//   customer User @relation("CustomerDeals", fields: [customer_id], references: [id])
-//   vendor   User @relation("VendorDeals", fields: [vendor_id], references: [id])
-//   disputes Dispute[]
-//   reviews  Review[]
-// }
-
-// model Dispute {
-//   id           String        @id @default(uuid())
-//   deal_id      String
-//   opened_by    String        // 'CUSTOMER' | 'VENDOR'
-//   reason       String
-//   status       DisputeStatus @default(PENDING)
-//   resolved_at  DateTime?
-//   resolution   String?       // 'CUSTOMER_WON' | 'VENDOR_WON'
-//   created_at   DateTime      @default(now())
-
-//   deal Deal @relation(fields: [deal_id], references: [id])
-// }
-
-// model Review {
-//   id          String   @id @default(uuid())
-//   deal_id     String
-//   author_id   String
-//   target_id   String
-//   rating      Int
-//   comment     String?
-//   created_at  DateTime @default(now())
-
-//   // Явные имена отношений для User
-//   deal    Deal @relation(fields: [deal_id], references: [id])
-//   author  User @relation("AuthoredReviews", fields: [author_id], references: [id])
-//   target  User @relation("TargetReviews", fields: [target_id], references: [id])
-
-//   // Валидация рейтинга (добавляется через @map в миграции)
-//   @@map("reviews")
-//   @@index([deal_id])
-// }
-
-// // Enums (без изменений)
-// enum UserRole {
-//   CUSTOMER
-//   VENDOR
-//   ADMIN
-//   MODERATOR
-// }
-
-// enum DealStatus {
-//   PENDING
-//   ACTIVE
-//   COMPLETED
-//   CANCELLED
-//   DECLINED
-//   DISPUTED
-// }
-
-// enum DealInitiator {
-//   CUSTOMER
-//   VENDOR
-// }
-
-// enum DisputeStatus {
-//   PENDING
-//   RESOLVED
-// }

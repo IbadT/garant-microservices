@@ -8,7 +8,12 @@ import {
   AcceptDealRequest,
   CancelDealRequest,
   ConfirmCompletionRequest,
-  DealResponse
+  DealResponse,
+  DeclineDealRequest,
+  OpenDisputeRequest,
+  ResolveDisputeRequest,
+  GetActiveDealsRequest,
+  GetDealByIdRequest
 } from '../proto/generated/src/proto/deal.pb';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { SendHelloDto } from './dto/send-hello.dto';
@@ -18,6 +23,9 @@ import { CancelDealDto } from './dto/cancel-deal.dto';
 import { ConfirmCompletionDto } from './dto/confirm-completion.dto';
 import { RpcException } from '@nestjs/microservices';
 import { validate } from 'class-validator';
+import { DeclineDealDto } from './dto/decline-deal.dto';
+import { OpenDisputeDto } from './dto/open-dispute.dto';
+import { ResolveDisputeDto } from './dto/resolve-dispute.dto';
 
 @ApiTags('Deals (gRPC)')
 @Controller()
@@ -93,6 +101,40 @@ export class DealController {
     }
   }
 
+  @ApiOperation({ summary: 'Decline deal', description: 'Declines an existing deal' })
+  @GrpcMethod('DealService', 'DeclineDeal')
+  async declineDeal(data: DeclineDealRequest): Promise<DealResponse> {
+    try {
+      // Валидация входных данных
+      const declineDealDto = new DeclineDealDto();
+      Object.assign(declineDealDto, data);
+      
+      // Проверка валидации
+      const errors = await this.validateDto(declineDealDto);
+      if (errors.length > 0) {
+        throw new RpcException({
+          code: 3, // INVALID_ARGUMENT
+          message: JSON.stringify(errors)
+        });
+      }
+      
+      const deal = await this.dealService.declineDeal(data.dealId, data.userId);
+      return {
+        id: deal.id,
+        status: deal.status,
+        message: 'Deal declined successfully'
+      };
+    } catch (error) {
+      if (error instanceof RpcException) {
+        throw error;
+      }
+      throw new RpcException({
+        code: 13, // INTERNAL
+        message: error.message || 'Internal server error'
+      });
+    }
+  }
+
   @ApiOperation({ summary: 'Cancel deal', description: 'Cancels an existing deal' })
   @GrpcMethod('DealService', 'CancelDeal')
   async cancelDeal(data: CancelDealRequest): Promise<DealResponse> {
@@ -110,10 +152,10 @@ export class DealController {
         });
       }
       
-      // Implement cancel deal functionality
+      const deal = await this.dealService.cancelDeal(data.dealId, data.userId);
       return {
-        id: data.dealId,
-        status: 'CANCELLED',
+        id: deal.id,
+        status: deal.status,
         message: 'Deal cancelled successfully'
       };
     } catch (error) {
@@ -144,12 +186,119 @@ export class DealController {
         });
       }
       
-      // Implement confirm completion functionality
+      const deal = await this.dealService.confirmCompletion(data.dealId, data.userId);
       return {
-        id: data.dealId,
-        status: 'COMPLETED',
+        id: deal.id,
+        status: deal.status,
         message: 'Deal completed successfully'
       };
+    } catch (error) {
+      if (error instanceof RpcException) {
+        throw error;
+      }
+      throw new RpcException({
+        code: 13, // INTERNAL
+        message: error.message || 'Internal server error'
+      });
+    }
+  }
+
+  @ApiOperation({ summary: 'Open dispute', description: 'Opens a dispute for a deal' })
+  @GrpcMethod('DealService', 'OpenDispute')
+  async openDispute(data: OpenDisputeRequest): Promise<DealResponse> {
+    try {
+      // Валидация входных данных
+      const openDisputeDto = new OpenDisputeDto();
+      Object.assign(openDisputeDto, data);
+      
+      // Проверка валидации
+      const errors = await this.validateDto(openDisputeDto);
+      if (errors.length > 0) {
+        throw new RpcException({
+          code: 3, // INVALID_ARGUMENT
+          message: JSON.stringify(errors)
+        });
+      }
+      
+      const result = await this.dealService.openDispute(data.dealId, data.userId, data.reason);
+      return {
+        id: result.deal.id,
+        status: result.deal.status,
+        message: 'Dispute opened successfully'
+      };
+    } catch (error) {
+      if (error instanceof RpcException) {
+        throw error;
+      }
+      throw new RpcException({
+        code: 13, // INTERNAL
+        message: error.message || 'Internal server error'
+      });
+    }
+  }
+
+  @ApiOperation({ summary: 'Resolve dispute', description: 'Resolves a dispute for a deal' })
+  @GrpcMethod('DealService', 'ResolveDispute')
+  async resolveDispute(data: ResolveDisputeRequest): Promise<DealResponse> {
+    try {
+      // Валидация входных данных
+      const resolveDisputeDto = new ResolveDisputeDto();
+      Object.assign(resolveDisputeDto, data);
+      
+      // Проверка валидации
+      const errors = await this.validateDto(resolveDisputeDto);
+      if (errors.length > 0) {
+        throw new RpcException({
+          code: 3, // INVALID_ARGUMENT
+          message: JSON.stringify(errors)
+        });
+      }
+      
+      const result = await this.dealService.resolveDispute(
+        data.dealId, 
+        data.disputeId, 
+        data.resolution, 
+        data.moderatorId
+      );
+      return {
+        id: result.deal.id,
+        status: result.deal.status,
+        message: 'Dispute resolved successfully'
+      };
+    } catch (error) {
+      if (error instanceof RpcException) {
+        throw error;
+      }
+      throw new RpcException({
+        code: 13, // INTERNAL
+        message: error.message || 'Internal server error'
+      });
+    }
+  }
+
+  @ApiOperation({ summary: 'Get active deals', description: 'Gets all active deals for a user' })
+  @GrpcMethod('DealService', 'GetActiveDeals')
+  async getActiveDeals(data: GetActiveDealsRequest): Promise<any> {
+    try {
+      const deals = await this.dealService.getActiveDeals(data.userId);
+      return { deals };
+    } catch (error) {
+      if (error instanceof RpcException) {
+        throw error;
+      }
+      throw new RpcException({
+        code: 13, // INTERNAL
+        message: error.message || 'Internal server error'
+      });
+    }
+  }
+
+  @ApiOperation({ summary: 'Get deal by ID', description: 'Gets a deal by its ID' })
+  @GrpcMethod('DealService', 'GetDealById')
+  async getDealById(data: GetDealByIdRequest): Promise<any> {
+    try {
+      const deal = await this.dealService.getDealById(data.dealId);
+      return { deal };
     } catch (error) {
       if (error instanceof RpcException) {
         throw error;
