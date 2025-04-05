@@ -21,7 +21,7 @@
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
-    "test:grpc": "ts-node test-grpc.ts",
+    "test:grpc": "ts-node src/test-grpc.ts",
     "sentry:sourcemaps": "sentry-cli sourcemaps inject --org redev-tt --project node-nestjs ./dist && sentry-cli sourcemaps upload --org redev-tt --project node-nestjs ./dist"
   },
   "dependencies": {

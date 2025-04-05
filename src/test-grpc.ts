@@ -1,18 +1,11 @@
-import * as grpc from '@grpc/grpc-js';
-import * as protoLoader from '@grpc/proto-loader';
-import * as path from 'path';
-import * as fs from 'fs';
+import { credentials } from '@grpc/grpc-js';
+import { loadPackageDefinition } from '@grpc/grpc-js';
+import { loadSync } from '@grpc/proto-loader';
+import { join } from 'path';
 
-// Загрузка proto файла
-const PROTO_PATH = path.resolve(__dirname, './proto/deal.proto');
+const PROTO_PATH = join(__dirname, 'proto/deal.proto');
 
-// Проверка существования файла
-if (!fs.existsSync(PROTO_PATH)) {
-  console.error(`Proto file not found at ${PROTO_PATH}`);
-  process.exit(1);
-}
-
-const packageDefinition = protoLoader.loadSync(PROTO_PATH, {
+const packageDefinition = loadSync(PROTO_PATH, {
   keepCase: true,
   longs: String,
   enums: String,
@@ -20,54 +13,43 @@ const packageDefinition = protoLoader.loadSync(PROTO_PATH, {
   oneofs: true,
 });
 
-// Получение сервиса из загруженного proto
-const protoDescriptor = grpc.loadPackageDefinition(packageDefinition);
-const dealService = protoDescriptor.deal;
+const protoDescriptor = loadPackageDefinition(packageDefinition) as any;
+const dealService = protoDescriptor.deal.DealService;
 
-// Создание клиента
-const client = new (dealService as any).DealService(
+const client = new dealService(
   'localhost:50051',
-  grpc.credentials.createInsecure()
+  credentials.createInsecure()
 );
 
-// Функция для тестирования gRPC соединения
-function testGrpcConnection() {
+async function testSendHello() {
   return new Promise((resolve, reject) => {
-    // Проверка соединения
-    const deadline = new Date();
-    deadline.setSeconds(deadline.getSeconds() + 5);
+    const request = {
+      message: 'Hello from gRPC client!'
+    };
 
-    client.waitForReady(deadline, (error) => {
+    client.SendHello(request, (error, response) => {
       if (error) {
-        console.error('Error connecting to gRPC server:', error);
+        console.error('Error:', error);
         reject(error);
         return;
       }
-
-      console.log('Successfully connected to gRPC server!');
-      
-      // Тестирование метода SendHello
-      client.SendHello({ message: 'Hello from test client!' }, (err, response) => {
-        if (err) {
-          console.error('Error calling SendHello:', err);
-          reject(err);
-          return;
-        }
-        console.log('SendHello response:', response);
-        resolve(response);
-      });
+      console.log('Response:', response);
+      resolve(response);
     });
   });
 }
 
-// Запуск теста
-console.log('Testing gRPC connection...');
-testGrpcConnection()
-  .then(() => {
-    console.log('gRPC test completed successfully');
-    process.exit(0);
-  })
-  .catch((error) => {
-    console.error('gRPC test failed:', error);
-    process.exit(1);
-  }); 
+async function runTest() {
+  try {
+    console.log('Testing gRPC SendHello...');
+    const result = await testSendHello();
+    console.log('Test completed successfully!');
+    console.log('Result:', result);
+  } catch (error) {
+    console.error('Test failed:', error);
+  } finally {
+    client.close();
+  }
+}
+
+runTest(); 
