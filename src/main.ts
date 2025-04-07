@@ -64,15 +64,16 @@ async function bootstrap() {
   // Инициализация Sentry
   initSentry(SENTRY_DNS);
 
-  const PROTO_PATH = join(process.cwd(), "dist/proto/proto/deal.proto");
+  const PROTO_PATH = join(process.cwd(), "dist/proto/garant.proto");
   
   logger.log(`Connecting to gRPC server at: ${GRPC_URL}`);
 
+  // Connect to the deal service
   app.connectMicroservice<MicroserviceOptions>({
     transport: Transport.GRPC,
     options: {
       url: GRPC_URL,
-      package: "deal",
+      package: "garant",
       protoPath: PROTO_PATH
     }
   });

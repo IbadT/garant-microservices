@@ -81,6 +81,9 @@ db-migrate:
 db-generate:
 	npx prisma generate
 
+db-seed:
+	npx prisma db seed
+
 # Development setup
 dev-setup: install proto-gen build
 
@@ -111,5 +114,6 @@ help:
 	@echo "  make format       - Format code"
 	@echo "  make db-migrate   - Run database migrations"
 	@echo "  make db-generate  - Generate Prisma client"
+	@echo "  make db-seed      - Seed the database"
 	@echo "  make dev-setup    - Setup development environment"
 	@echo "  make prod-setup   - Setup production environment" 

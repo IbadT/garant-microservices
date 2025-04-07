@@ -17,8 +17,8 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
         useFactory: async (configService: ConfigService) => ({
           transport: Transport.GRPC,
           options: {
-            package: 'deal',
-            protoPath: join(process.cwd(), 'dist/proto/deal.proto'),
+            package: 'garant',
+            protoPath: join(process.cwd(), 'src/proto/garant.proto'),
             url: configService.get<string>('DEALS_SERVICE_URL') || 'localhost:50051',
           },
         }),
@@ -30,8 +30,8 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
         useFactory: async (configService: ConfigService) => ({
           transport: Transport.GRPC,
           options: {
-            package: 'disputes',
-            protoPath: join(process.cwd(), 'dist/proto/dispute.proto'),
+            package: 'garant',
+            protoPath: join(process.cwd(), 'src/proto/garant.proto'),
             url: configService.get<string>('DISPUTES_SERVICE_URL') || 'localhost:50051',
           },
         }),

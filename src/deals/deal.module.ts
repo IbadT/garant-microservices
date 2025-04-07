@@ -20,8 +20,8 @@ import { ConfigModule, ConfigService } from "@nestjs/config";
                     transport: Transport.GRPC,
                     options: {
                         url: configService.get<string>("GRPC_URL"),
-                        package: "deal",
-                        protoPath: join(process.cwd(), "src/proto/deal.proto"),
+                        package: "garant",
+                        protoPath: join(process.cwd(), "src/proto/garant.proto"),
                     },
                 }),
                 inject: [ConfigService],

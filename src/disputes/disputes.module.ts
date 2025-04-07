@@ -14,8 +14,8 @@ import { join } from 'path';
         name: 'DISPUTES_PACKAGE',
         transport: Transport.GRPC,
         options: {
-          package: 'disputes',
-          protoPath: join(__dirname, '../proto/dispute.proto'),
+          package: 'garant',
+          protoPath: join(process.cwd(), 'src/proto/garant.proto'),
           url: process.env.DISPUTES_SERVICE_URL || 'localhost:50051',
         },
       },
