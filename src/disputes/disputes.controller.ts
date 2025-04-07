@@ -1,18 +1,81 @@
-import { Controller, Delete, Param } from '@nestjs/common';
+import { Controller } from '@nestjs/common';
 import { DisputesService } from './disputes.service';
-import { ApiTags, ApiOperation, ApiParam, ApiResponse } from '@nestjs/swagger';
+import { GrpcMethod } from '@nestjs/microservices';
+import { DisputeStatus } from '@prisma/client';
 
-@ApiTags('Disputes')
-@Controller('disputes')
+@Controller()
 export class DisputesController {
   constructor(private readonly disputesService: DisputesService) {}
 
-  @ApiOperation({ summary: 'Delete dispute', description: 'Deletes a dispute by ID' })
-  @ApiParam({ name: 'id', description: 'Dispute ID', type: 'string' })
-  @ApiResponse({ status: 200, description: 'Dispute successfully deleted' })
-  @ApiResponse({ status: 404, description: 'Dispute not found' })
-  @Delete(':id')
-  async remove(@Param('id') id: string) {
-    return this.disputesService.deleteDispute(id); // Изменено с remove на deleteDispute
+  @GrpcMethod('DisputesService', 'OpenDispute')
+  async openDispute(data: { dealId: string; userId: string; reason: string }) {
+    const result = await this.disputesService.openDispute(
+      data.dealId,
+      data.userId,
+      data.reason,
+    );
+    return {
+      id: result.id,
+      status: result.status,
+      message: result.message,
+    };
+  }
+
+  @GrpcMethod('DisputesService', 'ResolveDispute')
+  async resolveDispute(data: {
+    dealId: string;
+    disputeId: string;
+    resolution: string;
+    moderatorId: string;
+  }) {
+    const result = await this.disputesService.resolveDispute(
+      data.dealId,
+      data.disputeId,
+      data.resolution,
+      data.moderatorId,
+    );
+    return {
+      id: result.id,
+      status: result.status,
+      message: result.message,
+    };
+  }
+
+  @GrpcMethod('DisputesService', 'GetDisputeById')
+  async getDisputeById(data: { disputeId: string }) {
+    const result = await this.disputesService.getDisputeById(data.disputeId);
+    return {
+      dispute: {
+        id: result.dispute.id,
+        deal_id: result.dispute.deal_id,
+        opened_by: result.dispute.opened_by,
+        opened_by_role: result.dispute.opened_by_role,
+        reason: result.dispute.reason,
+        status: result.dispute.status,
+        resolved_at: result.dispute.resolved_at?.toISOString(),
+        resolution: result.dispute.resolution,
+        created_at: result.dispute.created_at.toISOString(),
+        updated_at: result.dispute.updated_at.toISOString(),
+      },
+    };
+  }
+
+  @GrpcMethod('DisputesService', 'GetDisputesByDealId')
+  async getDisputesByDealId(data: { dealId: string }) {
+    const result = await this.disputesService.getDisputesByDealId(data.dealId);
+    return {
+      disputes: result.disputes.map((dispute) => ({
+        id: dispute.id,
+        deal_id: dispute.deal_id,
+        opened_by: dispute.opened_by,
+        opened_by_role: dispute.opened_by_role,
+        reason: dispute.reason,
+        status: dispute.status,
+        resolved_at: dispute.resolved_at?.toISOString(),
+        resolution: dispute.resolution,
+        created_at: dispute.created_at.toISOString(),
+        updated_at: dispute.updated_at.toISOString(),
+      })),
+    };
   }
 }

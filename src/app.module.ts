@@ -7,6 +7,8 @@ import { DealModule } from './deals/deal.module';
 import { ConfigModule } from '@nestjs/config';
 import { SentryGlobalFilter } from '@sentry/nestjs/setup';
 import { APP_FILTER } from '@nestjs/core';
+import { PrismaService } from './prisma.service';
+import { ClientModule } from './client/client.module';
 
 
 @Module({
@@ -16,7 +18,8 @@ import { APP_FILTER } from '@nestjs/core';
     }),
     SentryModule.forRoot(),
     DisputesModule,
-    DealModule
+    DealModule,
+    ClientModule,
   ],
   controllers: [AppController],
   providers: [
@@ -25,6 +28,7 @@ import { APP_FILTER } from '@nestjs/core';
       provide: APP_FILTER,
       useClass: SentryGlobalFilter,
     },
+    PrismaService,
   ],
 })
 export class AppModule {}

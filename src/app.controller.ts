@@ -1,11 +1,12 @@
 import { Controller, Get, Logger } from '@nestjs/common';
 import { AppService } from './app.service';
-import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 
-@ApiTags('App')
+@ApiTags('garant')
 @Controller()
 export class AppController {
-  private logger = new Logger('AppController');
+  private readonly logger = new Logger(AppController.name);
+
   constructor(private readonly appService: AppService) {}
 
   @Get("/debug-sentry")
@@ -13,9 +14,19 @@ export class AppController {
     throw new Error("My first Sentry error!");
   }
 
-  @ApiOperation({ summary: 'Get hello message', description: 'Returns a hello message from the application' })
-  @ApiResponse({ status: 200, description: 'Returns hello message' })
-  @Get()
+  @ApiOperation({ 
+    summary: 'Get hello message', 
+    description: 'Returns a hello message with a number from the application' 
+  })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Returns hello message with number',
+    schema: {
+      type: 'string',
+      example: 'Hello World! Number: 1'
+    }
+  })
+  @Get('hello')
   getHello(): string {
     this.logger.log("Запущена функция getHello без параметров")
     return this.appService.getHello(1);

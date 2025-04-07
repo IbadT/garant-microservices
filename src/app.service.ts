@@ -5,11 +5,11 @@ export class AppService {
 
   /**
    * Тестовая функция
-   * @param {number} a - первое число
-   * @returns {string} - фраза "Hello world!"
+   * @param {number} num - число для демонстрации
+   * @returns {string} - фраза "Hello world!" с переданным числом
    * @returns {Promise<User[]>} Список пользователей.
    */
   getHello(num: number): string {
-    return 'Hello World!';
+    return `Hello World! Number: ${num}`;
   }
 }

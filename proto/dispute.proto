@@ -1,0 +1,58 @@
+syntax = "proto3";
+
+package disputes;
+
+service DisputesService {
+  rpc OpenDispute (OpenDisputeRequest) returns (DisputeResponse);
+  rpc ResolveDispute (ResolveDisputeRequest) returns (DisputeResponse);
+  rpc GetDisputeById (GetDisputeByIdRequest) returns (GetDisputeByIdResponse);
+  rpc GetDisputesByDealId (GetDisputesByDealIdRequest) returns (GetDisputesByDealIdResponse);
+}
+
+message OpenDisputeRequest {
+  string dealId = 1;
+  string userId = 2;
+  string reason = 3;
+}
+
+message ResolveDisputeRequest {
+  string dealId = 1;
+  string disputeId = 2;
+  string resolution = 3;
+  string moderatorId = 4;
+}
+
+message GetDisputeByIdRequest {
+  string disputeId = 1;
+}
+
+message GetDisputesByDealIdRequest {
+  string dealId = 1;
+}
+
+message DisputeResponse {
+  string id = 1;
+  string status = 2;
+  string message = 3;
+}
+
+message Dispute {
+  string id = 1;
+  string deal_id = 2;
+  string opened_by = 3;
+  string opened_by_role = 4;
+  string reason = 5;
+  string status = 6;
+  string resolved_at = 7;
+  string resolution = 8;
+  string created_at = 9;
+  string updated_at = 10;
+}
+
+message GetDisputeByIdResponse {
+  Dispute dispute = 1;
+}
+
+message GetDisputesByDealIdResponse {
+  repeated Dispute disputes = 1;
+} 

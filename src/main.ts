@@ -66,6 +66,7 @@ async function bootstrap() {
 
   const PROTO_PATH = join(process.cwd(), "dist/proto/proto/deal.proto");
   
+  logger.log(`Connecting to gRPC server at: ${GRPC_URL}`);
 
   app.connectMicroservice<MicroserviceOptions>({
     transport: Transport.GRPC,

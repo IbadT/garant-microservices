@@ -7,7 +7,7 @@
   "license": "UNLICENSED",
   "scripts": {
     "build": "nest build && mkdir -p dist/proto && cp -r src/proto/*.proto dist/proto/ && npm run sentry:sourcemaps",
-    "proto:gen": "protoc --plugin=protoc-gen-ts_proto=./node_modules/.bin/protoc-gen-ts_proto --ts_proto_out=./src/proto/generated --ts_proto_opt=nestJs=true,fileSuffix=.pb,addGrpcMetadata=true --ts_proto_opt=esModuleInterop=true ./src/proto/deal.proto",
+    "proto:gen": "protoc --plugin=protoc-gen-ts_proto=./node_modules/.bin/protoc-gen-ts_proto --ts_proto_out=./src/proto/generated --ts_proto_opt=nestJs=true,fileSuffix=.pb,addGrpcMetadata=true --ts_proto_opt=esModuleInterop=true ./src/proto/*.proto",
     "proto:watch": "nodemon --watch src/proto --ext proto --exec 'npm run proto:gen && npm run build'",
     "dev": "concurrently \"npm run start:dev\" \"npm run proto:watch\"",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
@@ -30,7 +30,7 @@
     "@nestjs/core": "^11.0.1",
     "@nestjs/jwt": "^11.0.0",
     "@nestjs/mapped-types": "*",
-    "@nestjs/microservices": "^11.0.12",
+    "@nestjs/microservices": "^11.0.13",
     "@nestjs/platform-express": "^11.0.1",
     "@nestjs/platform-socket.io": "^11.0.12",
     "@nestjs/platform-ws": "^11.0.12",
