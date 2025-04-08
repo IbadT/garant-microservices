@@ -21,7 +21,5 @@
     "sourceRoot": "/",
     "resolveJsonModule": true,
     "esModuleInterop": true
-  },
-  "include": ["src/**/*.ts"],
-  "exclude": ["node_modules", "dist", "**/*.spec.ts"]
+  }
 }

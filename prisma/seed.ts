@@ -18,8 +18,8 @@ async function main() {
         role: user.role as UserRole,
         balance: user.balance,
         reserved_balance: user.reserved_balance,
-        created_at: user.created_at,
-        updated_at: user.updated_at
+        created_at: new Date(user.created_at),
+        updated_at: new Date(user.updated_at)
       },
     });
     console.log(`Created user with id: ${createdUser.id}`);
@@ -39,12 +39,12 @@ async function main() {
         status: deal.status as DealStatus,
         initiator: deal.initiator as DealInitiator,
         funds_reserved: deal.funds_reserved,
-        created_at: deal.created_at,
-        accepted_at: deal.accepted_at,
-        completed_at: deal.completed_at,
-        cancelled_at: deal.cancelled_at,
+        created_at: new Date(deal.created_at),
+        accepted_at: deal.accepted_at ? new Date(deal.accepted_at) : null,
+        completed_at: deal.completed_at ? new Date(deal.completed_at) : null,
+        cancelled_at: deal.cancelled_at ? new Date(deal.cancelled_at) : null,
         cancelled_by: deal.cancelled_by,
-        declined_at: deal.declined_at,
+        declined_at: deal.declined_at ? new Date(deal.declined_at) : null,
         declined_by: deal.declined_by
       },
     });
@@ -60,13 +60,13 @@ async function main() {
         id: dispute.id,
         deal_id: dispute.deal_id,
         opened_by: dispute.opened_by,
-        opened_by_role: dispute.opened_by_role,
+        opened_by_role: dispute.opened_by_role as UserRole,
         reason: dispute.reason,
         status: dispute.status as DisputeStatus,
-        resolved_at: dispute.resolved_at,
+        resolved_at: dispute.resolved_at ? new Date(dispute.resolved_at) : null,
         resolution: dispute.resolution,
-        created_at: dispute.created_at,
-        updated_at: dispute.updated_at
+        created_at: new Date(dispute.created_at),
+        updated_at: new Date(dispute.updated_at)
       },
     });
     console.log(`Created dispute with id: ${createdDispute.id}`);

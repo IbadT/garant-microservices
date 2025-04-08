@@ -1,47 +1,50 @@
 {
   "users": [
     {
-      "id": "123e4567-e89b-12d3-a456-426614174000",
+      "id": "550e8400-e29b-41d4-a716-446655440000",
       "email": "customer@example.com",
       "password_hash": "$2b$10$K7L1OJ45/4Y2nIvhRVpCe.FSmhDdWoXehVzJptJ/op0lSsvqNu9mO",
       "role": "CUSTOMER",
       "balance": 1000.00,
       "reserved_balance": 0.00,
       "created_at": "2024-03-01T00:00:00.000Z",
-      "updated_at": "2024-03-01T00:00:00.000Z"
+      "updated_at": "2024-03-01T00:00:00.000Z",
+      "name": "John Doe"
     },
     {
-      "id": "123e4567-e89b-12d3-a456-426614174001",
+      "id": "550e8400-e29b-41d4-a716-446655440001",
       "email": "vendor@example.com",
       "password_hash": "$2b$10$K7L1OJ45/4Y2nIvhRVpCe.FSmhDdWoXehVzJptJ/op0lSsvqNu9mO",
       "role": "VENDOR",
       "balance": 500.00,
       "reserved_balance": 0.00,
       "created_at": "2024-03-01T00:00:00.000Z",
-      "updated_at": "2024-03-01T00:00:00.000Z"
+      "updated_at": "2024-03-01T00:00:00.000Z",
+      "name": "Jane Smith"
     },
     {
-      "id": "123e4567-e89b-12d3-a456-426614174002",
+      "id": "550e8400-e29b-41d4-a716-446655440002",
       "email": "moderator@example.com",
       "password_hash": "$2b$10$K7L1OJ45/4Y2nIvhRVpCe.FSmhDdWoXehVzJptJ/op0lSsvqNu9mO",
       "role": "MODERATOR",
       "balance": 0.00,
       "reserved_balance": 0.00,
       "created_at": "2024-03-01T00:00:00.000Z",
-      "updated_at": "2024-03-01T00:00:00.000Z"
+      "updated_at": "2024-03-01T00:00:00.000Z",
+      "name": "Admin User"
     }
   ],
   "deals": [
     {
-      "id": "123e4567-e89b-12d3-a456-426614174003",
-      "customer_id": "123e4567-e89b-12d3-a456-426614174000",
-      "vendor_id": "123e4567-e89b-12d3-a456-426614174001",
-      "amount": 100.00,
+      "id": "550e8400-e29b-41d4-a716-446655440003",
+      "customer_id": "550e8400-e29b-41d4-a716-446655440000",
+      "vendor_id": "550e8400-e29b-41d4-a716-446655440001",
+      "amount": 1000,
       "description": "Web development services",
       "status": "PENDING",
       "initiator": "CUSTOMER",
       "funds_reserved": false,
-      "created_at": "2024-03-01T00:00:00.000Z",
+      "created_at": "2024-03-20T10:00:00Z",
       "accepted_at": null,
       "completed_at": null,
       "cancelled_at": null,
@@ -50,16 +53,16 @@
       "declined_by": null
     },
     {
-      "id": "123e4567-e89b-12d3-a456-426614174004",
-      "customer_id": "123e4567-e89b-12d3-a456-426614174000",
-      "vendor_id": "123e4567-e89b-12d3-a456-426614174001",
-      "amount": 200.00,
-      "description": "Mobile app development",
+      "id": "550e8400-e29b-41d4-a716-446655440004",
+      "customer_id": "550e8400-e29b-41d4-a716-446655440000",
+      "vendor_id": "550e8400-e29b-41d4-a716-446655440001",
+      "amount": 500,
+      "description": "Logo design",
       "status": "ACTIVE",
       "initiator": "VENDOR",
       "funds_reserved": true,
-      "created_at": "2024-03-01T02:00:00.000Z",
-      "accepted_at": "2024-03-01T02:30:00.000Z",
+      "created_at": "2024-03-19T15:30:00Z",
+      "accepted_at": "2024-03-19T16:00:00Z",
       "completed_at": null,
       "cancelled_at": null,
       "cancelled_by": null,
@@ -67,9 +70,9 @@
       "declined_by": null
     },
     {
-      "id": "123e4567-e89b-12d3-a456-426614174007",
-      "customer_id": "123e4567-e89b-12d3-a456-426614174000",
-      "vendor_id": "123e4567-e89b-12d3-a456-426614174001",
+      "id": "550e8400-e29b-41d4-a716-446655440007",
+      "customer_id": "550e8400-e29b-41d4-a716-446655440000",
+      "vendor_id": "550e8400-e29b-41d4-a716-446655440001",
       "amount": 150.00,
       "description": "UI/UX design services",
       "status": "COMPLETED",
@@ -84,9 +87,9 @@
       "declined_by": null
     },
     {
-      "id": "123e4567-e89b-12d3-a456-426614174008",
-      "customer_id": "123e4567-e89b-12d3-a456-426614174000",
-      "vendor_id": "123e4567-e89b-12d3-a456-426614174001",
+      "id": "550e8400-e29b-41d4-a716-446655440008",
+      "customer_id": "550e8400-e29b-41d4-a716-446655440000",
+      "vendor_id": "550e8400-e29b-41d4-a716-446655440001",
       "amount": 300.00,
       "description": "Backend development",
       "status": "CANCELLED",
@@ -96,14 +99,14 @@
       "accepted_at": "2024-03-01T07:30:00.000Z",
       "completed_at": null,
       "cancelled_at": "2024-03-01T08:00:00.000Z",
-      "cancelled_by": "123e4567-e89b-12d3-a456-426614174000",
+      "cancelled_by": "550e8400-e29b-41d4-a716-446655440000",
       "declined_at": null,
       "declined_by": null
     },
     {
-      "id": "123e4567-e89b-12d3-a456-426614174009",
-      "customer_id": "123e4567-e89b-12d3-a456-426614174000",
-      "vendor_id": "123e4567-e89b-12d3-a456-426614174001",
+      "id": "550e8400-e29b-41d4-a716-446655440009",
+      "customer_id": "550e8400-e29b-41d4-a716-446655440000",
+      "vendor_id": "550e8400-e29b-41d4-a716-446655440001",
       "amount": 250.00,
       "description": "Database optimization",
       "status": "DECLINED",
@@ -115,50 +118,50 @@
       "cancelled_at": null,
       "cancelled_by": null,
       "declined_at": "2024-03-01T09:30:00.000Z",
-      "declined_by": "123e4567-e89b-12d3-a456-426614174000"
+      "declined_by": "550e8400-e29b-41d4-a716-446655440000"
     }
   ],
   "disputes": [
     {
-      "id": "123e4567-e89b-12d3-a456-426614174005",
-      "deal_id": "123e4567-e89b-12d3-a456-426614174003",
-      "opened_by": "123e4567-e89b-12d3-a456-426614174000",
+      "id": "550e8400-e29b-41d4-a716-446655440005",
+      "deal_id": "550e8400-e29b-41d4-a716-446655440003",
+      "opened_by": "550e8400-e29b-41d4-a716-446655440000",
       "opened_by_role": "CUSTOMER",
-      "reason": "Service not provided as agreed in the contract",
+      "reason": "The service was not provided as agreed",
       "status": "PENDING",
-      "resolved_at": null,
       "resolution": null,
-      "created_at": "2024-03-01T03:00:00.000Z",
-      "updated_at": "2024-03-01T03:00:00.000Z"
+      "resolved_at": null,
+      "created_at": "2024-03-20T11:00:00Z",
+      "updated_at": "2024-03-20T11:00:00Z"
     },
     {
-      "id": "123e4567-e89b-12d3-a456-426614174010",
-      "deal_id": "123e4567-e89b-12d3-a456-426614174004",
-      "opened_by": "123e4567-e89b-12d3-a456-426614174001",
+      "id": "550e8400-e29b-41d4-a716-446655440006",
+      "deal_id": "550e8400-e29b-41d4-a716-446655440004",
+      "opened_by": "550e8400-e29b-41d4-a716-446655440001",
       "opened_by_role": "VENDOR",
-      "reason": "Payment not released after work completion",
+      "reason": "Payment not received after completion",
       "status": "RESOLVED",
-      "resolved_at": "2024-03-01T10:30:00.000Z",
       "resolution": "VENDOR_WON",
-      "created_at": "2024-03-01T10:00:00.000Z",
-      "updated_at": "2024-03-01T10:30:00.000Z"
+      "resolved_at": "2024-03-20T12:00:00Z",
+      "created_at": "2024-03-20T10:00:00Z",
+      "updated_at": "2024-03-20T12:00:00Z"
     }
   ],
   "reviews": [
     {
-      "id": "123e4567-e89b-12d3-a456-426614174006",
-      "deal_id": "123e4567-e89b-12d3-a456-426614174003",
-      "author_id": "123e4567-e89b-12d3-a456-426614174000",
-      "target_id": "123e4567-e89b-12d3-a456-426614174001",
+      "id": "550e8400-e29b-41d4-a716-446655440010",
+      "deal_id": "550e8400-e29b-41d4-a716-446655440003",
+      "author_id": "550e8400-e29b-41d4-a716-446655440000",
+      "target_id": "550e8400-e29b-41d4-a716-446655440001",
       "rating": 5,
       "comment": "Excellent service, very professional",
       "created_at": "2024-03-01T04:00:00.000Z"
     },
     {
-      "id": "123e4567-e89b-12d3-a456-426614174011",
-      "deal_id": "123e4567-e89b-12d3-a456-426614174007",
-      "author_id": "123e4567-e89b-12d3-a456-426614174001",
-      "target_id": "123e4567-e89b-12d3-a456-426614174000",
+      "id": "550e8400-e29b-41d4-a716-446655440011",
+      "deal_id": "550e8400-e29b-41d4-a716-446655440007",
+      "author_id": "550e8400-e29b-41d4-a716-446655440001",
+      "target_id": "550e8400-e29b-41d4-a716-446655440000",
       "rating": 4,
       "comment": "Good communication, clear requirements",
       "created_at": "2024-03-01T06:30:00.000Z"

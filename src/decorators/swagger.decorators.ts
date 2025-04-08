@@ -70,8 +70,8 @@ export const ApiAcceptDeal = () => {
       schema: {
         type: 'object',
         properties: {
-          dealId: { type: 'string', format: 'uuid', description: 'ID of the deal to accept' },
-          userId: { type: 'string', format: 'uuid', description: 'ID of the user accepting the deal' },
+          dealId: { type: 'string', format: 'uuid', description: 'ID of the deal to accept', example: "550e8400-e29b-41d4-a716-446655440003" },
+          userId: { type: 'string', format: 'uuid', description: 'ID of the user accepting the deal', example: "550e8400-e29b-41d4-a716-446655440000" },
         },
         required: ['dealId', 'userId'],
       },
