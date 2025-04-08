@@ -22,6 +22,8 @@ model User {
   vendor_deals   Deal[]   @relation("VendorDeals")
   authored_reviews Review[] @relation("AuthoredReviews")
   target_reviews  Review[] @relation("TargetReviews")
+
+  @@map("users")
 }
 
 model Deal {
@@ -46,6 +48,8 @@ model Deal {
   vendor   User @relation("VendorDeals", fields: [vendor_id], references: [id])
   disputes Dispute[]
   reviews  Review[]
+
+  @@map("deals")
 }
 
 model Dispute {
@@ -61,6 +65,8 @@ model Dispute {
   updated_at   DateTime      @updatedAt
 
   deal Deal @relation(fields: [deal_id], references: [id])
+
+  @@map("disputes")
 }
 
 model Review {

@@ -1,20 +1,30 @@
 syntax = "proto3";
 
-package deal;
+package garant;
 
+// Deal Service
 service DealService {
   rpc CreateDeal (CreateDealRequest) returns (DealResponse);
   rpc AcceptDeal (AcceptDealRequest) returns (DealResponse);
   rpc DeclineDeal (DeclineDealRequest) returns (DealResponse);
   rpc CancelDeal (CancelDealRequest) returns (DealResponse);
   rpc ConfirmCompletion (ConfirmCompletionRequest) returns (DealResponse);
-  rpc OpenDispute (OpenDisputeRequest) returns (DealResponse);
-  rpc ResolveDispute (ResolveDisputeRequest) returns (DealResponse);
+  rpc OpenDealDispute (OpenDealDisputeRequest) returns (DealResponse);
+  rpc ResolveDealDispute (ResolveDealDisputeRequest) returns (DealResponse);
   rpc GetActiveDeals (GetActiveDealsRequest) returns (GetActiveDealsResponse);
   rpc GetDealById (GetDealByIdRequest) returns (GetDealByIdResponse);
   rpc SendHello (SendHelloRequest) returns (SendHelloResponse);
 }
 
+// Disputes Service
+service DisputesService {
+  rpc OpenDispute (OpenDisputeRequest) returns (DisputeResponse);
+  rpc ResolveDispute (ResolveDisputeRequest) returns (DisputeResponse);
+  rpc GetDisputeById (GetDisputeByIdRequest) returns (GetDisputeByIdResponse);
+  rpc GetDisputesByDealId (GetDisputesByDealIdRequest) returns (GetDisputesByDealIdResponse);
+}
+
+// Common Messages
 message SendHelloRequest {
   string message = 1;
 }
@@ -23,8 +33,7 @@ message SendHelloResponse {
   string message = 1;
 }
 
-// 
-
+// Deal Service Messages
 message CreateDealRequest {
   string initiator_id = 1;
   string target_id = 2;
@@ -49,8 +58,6 @@ message DealResponse {
   string message = 3;
 }
 
-// Остальные сообщения...
-
 message CancelDealRequest {
   string deal_id = 1;
   string user_id = 2;
@@ -61,13 +68,13 @@ message ConfirmCompletionRequest {
   string user_id = 2;
 }
 
-message OpenDisputeRequest {
+message OpenDealDisputeRequest {
   string deal_id = 1;
   string user_id = 2;
   string reason = 3;
 }
 
-message ResolveDisputeRequest {
+message ResolveDealDisputeRequest {
   string deal_id = 1;
   string dispute_id = 2;
   string resolution = 3;
@@ -109,6 +116,34 @@ message Deal {
   Dispute last_dispute = 16;
 }
 
+// Disputes Service Messages
+message OpenDisputeRequest {
+  string dealId = 1;
+  string userId = 2;
+  string reason = 3;
+}
+
+message ResolveDisputeRequest {
+  string dealId = 1;
+  string disputeId = 2;
+  string resolution = 3;
+  string moderatorId = 4;
+}
+
+message GetDisputeByIdRequest {
+  string disputeId = 1;
+}
+
+message GetDisputesByDealIdRequest {
+  string dealId = 1;
+}
+
+message DisputeResponse {
+  string id = 1;
+  string status = 2;
+  string message = 3;
+}
+
 message Dispute {
   string id = 1;
   string deal_id = 2;
@@ -121,3 +156,11 @@ message Dispute {
   string created_at = 9;
   string updated_at = 10;
 }
+
+message GetDisputeByIdResponse {
+  Dispute dispute = 1;
+}
+
+message GetDisputesByDealIdResponse {
+  repeated Dispute disputes = 1;
+} 

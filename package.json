@@ -6,9 +6,9 @@
   "private": true,
   "license": "UNLICENSED",
   "scripts": {
-    "build": "nest build && rm -rf dist/proto && mkdir -p dist/proto && cp -r src/proto/*.proto dist/proto/ && npm run sentry:sourcemaps",
-    "proto:gen": "protoc --plugin=protoc-gen-ts_proto=./node_modules/.bin/protoc-gen-ts_proto --ts_proto_out=./src/proto/generated --ts_proto_opt=nestJs=true,fileSuffix=.pb,addGrpcMetadata=true --ts_proto_opt=esModuleInterop=true ./src/proto/*.proto",
-    "proto:watch": "nodemon --watch src/proto --ext proto --exec 'npm run proto:gen && npm run build'",
+    "build": "nest build && rm -rf dist/proto && cp -r proto dist/",
+    "proto:gen": "rm -rf src/proto/generated && mkdir -p src/proto/generated && protoc --plugin=protoc-gen-ts_proto=./node_modules/.bin/protoc-gen-ts_proto --ts_proto_out=./src/proto/generated --ts_proto_opt=nestJs=true,fileSuffix=.pb,addGrpcMetadata=true --ts_proto_opt=esModuleInterop=true,outputClientImpl=none ./proto/*.proto && mv src/proto/generated/proto/* src/proto/generated/ && rm -rf src/proto/generated/proto",
+    "proto:watch": "nodemon --watch proto --ext proto --exec 'npm run proto:gen && npm run build'",
     "dev": "concurrently \"npm run start:dev\" \"npm run proto:watch\"",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",

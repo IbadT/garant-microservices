@@ -1,7 +1,6 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { CreateDisputeDto } from './dto/create-dispute.dto';
 import { UpdateDisputeDto } from './dto/update-dispute.dto';
-// import { PrismaService } from '../prisma/prisma.service';
 import { PrismaService } from 'src/prisma.service';
 import { DisputeStatus, UserRole } from '@prisma/client';
 

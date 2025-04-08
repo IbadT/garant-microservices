@@ -12,7 +12,13 @@ build:
 	npm run build
 
 # Run the application in development mode
-run:
+run: db-up kafka-up
+	@echo "Starting Docker services..."
+	@echo "Waiting for services to be ready..."
+	@sleep 10
+	@echo "Running database migrations..."
+	npx prisma migrate deploy
+	@echo "Starting the application..."
 	npx concurrently "npm run start:dev" "npm run proto:watch"
 
 # Run tests
@@ -84,6 +90,10 @@ db-generate:
 db-seed:
 	npx prisma db seed
 
+db-migrate-create:
+	@read -p "Enter migration name: " name; \
+	npx prisma migrate dev --name $$name
+
 # Development setup
 dev-setup: install proto-gen build
 
@@ -115,5 +125,6 @@ help:
 	@echo "  make db-migrate   - Run database migrations"
 	@echo "  make db-generate  - Generate Prisma client"
 	@echo "  make db-seed      - Seed the database"
+	@echo "  make db-migrate-create - Create a new migration"
 	@echo "  make dev-setup    - Setup development environment"
 	@echo "  make prod-setup   - Setup production environment" 

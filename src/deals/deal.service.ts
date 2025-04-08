@@ -2,7 +2,8 @@ import { BadRequestException, Injectable, OnModuleInit } from '@nestjs/common';
 import { PrismaService } from 'src/prisma.service';
 import { KafkaService } from '../kafka/kafka.service';
 import { NotificationService } from 'src/notifications/notification.service';
-import { CreateDealRequest } from '../proto/generated/src/proto/deal.pb';
+// import { CreateDealRequest } from '../proto/generated/src/proto/garant.pb';
+import { CreateDealRequest } from '../proto/generated/garant.pb';
 import { DealStatus, DealInitiator, DisputeStatus } from '@prisma/client';
 
 // Define UserRole enum since it's not exported from Prisma

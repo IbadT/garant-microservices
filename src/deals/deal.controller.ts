@@ -2,19 +2,23 @@ import { Controller, UseFilters, UsePipes, ValidationPipe } from '@nestjs/common
 import { GrpcMethod, RpcException } from '@nestjs/microservices';
 import { DealService } from './deal.service';
 import { 
-  CreateDealRequest, 
-  SendHelloRequest, 
-  SendHelloResponse,
   AcceptDealRequest,
   CancelDealRequest,
   ConfirmCompletionRequest,
+  CreateDealRequest,
   DealResponse,
   DeclineDealRequest,
+  DisputeResponse,
+  GetActiveDealsRequest,
+  GetActiveDealsResponse,
+  GetDealByIdRequest,
+  GetDealByIdResponse,
   OpenDisputeRequest,
   ResolveDisputeRequest,
-  GetActiveDealsRequest,
-  GetDealByIdRequest
-} from '../proto/generated/src/proto/deal.pb';
+  SendHelloRequest,
+  SendHelloResponse,
+// } from '../proto/generated/src/proto/garant.pb';
+} from '../proto/generated/garant.pb';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { SendHelloDto } from './dto/send-hello.dto';
 import { CreateDealDto } from './dto/create-deal.dto';
@@ -206,8 +210,8 @@ export class DealController {
    * @throws {RpcException} Если данные невалидны или произошла внутренняя ошибка
    */
   @ApiOperation({ summary: 'Open dispute', description: 'Opens a dispute for a deal by either customer or vendor' })
-  @GrpcMethod('DealService', 'OpenDealDispute')
-  async openDispute(data: OpenDisputeRequest): Promise<DealResponse> {
+  @GrpcMethod('DealService', 'OpenDispute')
+  async openDispute(data: OpenDisputeRequest): Promise<DisputeResponse> {
     try {
       const openDisputeDto = new OpenDisputeDto();
       Object.assign(openDisputeDto, data);
@@ -222,8 +226,8 @@ export class DealController {
       
       const result = await this.dealService.openDispute(data.dealId, data.userId, data.reason);
       return {
-        id: result.deal.id,
-        status: result.deal.status,
+        id: result.dispute.id,
+        status: result.dispute.status,
         message: 'Dispute opened successfully'
       };
     } catch (error) {
@@ -244,8 +248,8 @@ export class DealController {
    * @throws {RpcException} Если данные невалидны или произошла внутренняя ошибка
    */
   @ApiOperation({ summary: 'Resolve dispute', description: 'Resolves a dispute for a deal by a moderator' })
-  @GrpcMethod('DealService', 'ResolveDealDispute')
-  async resolveDispute(data: ResolveDisputeRequest): Promise<DealResponse> {
+  @GrpcMethod('DealService', 'ResolveDispute')
+  async resolveDispute(data: ResolveDisputeRequest): Promise<DisputeResponse> {
     try {
       const resolveDisputeDto = new ResolveDisputeDto();
       Object.assign(resolveDisputeDto, data);
@@ -265,8 +269,8 @@ export class DealController {
         data.moderatorId
       );
       return {
-        id: result.deal.id,
-        status: result.deal.status,
+        id: result.dispute.id,
+        status: result.dispute.status,
         message: 'Dispute resolved successfully'
       };
     } catch (error) {
@@ -282,9 +286,38 @@ export class DealController {
 
   @ApiOperation({ summary: 'Get active deals', description: 'Gets all active deals for a user' })
   @GrpcMethod('DealService', 'GetActiveDeals')
-  async getActiveDeals(data: GetActiveDealsRequest): Promise<any> {
+  async getActiveDeals(data: GetActiveDealsRequest): Promise<GetActiveDealsResponse> {
     try {
-      const deals = await this.dealService.getActiveDeals(data.userId);
+      const dbDeals = await this.dealService.getActiveDeals(data.userId);
+      const deals = dbDeals.map(dbDeal => ({
+        id: dbDeal.id,
+        customerId: dbDeal.customer_id,
+        vendorId: dbDeal.vendor_id,
+        amount: dbDeal.amount,
+        description: dbDeal.description,
+        status: dbDeal.status,
+        initiator: dbDeal.initiator,
+        fundsReserved: dbDeal.funds_reserved,
+        createdAt: dbDeal.created_at.toISOString(),
+        acceptedAt: dbDeal.accepted_at?.toISOString() || '',
+        completedAt: dbDeal.completed_at?.toISOString() || '',
+        cancelledAt: dbDeal.cancelled_at?.toISOString() || '',
+        cancelledBy: dbDeal.cancelled_by || '',
+        declinedAt: dbDeal.declined_at?.toISOString() || '',
+        declinedBy: dbDeal.declined_by || '',
+        lastDispute: dbDeal.disputes[0] ? {
+          id: dbDeal.disputes[0].id,
+          dealId: dbDeal.disputes[0].deal_id,
+          openedBy: dbDeal.disputes[0].opened_by,
+          openedByRole: dbDeal.disputes[0].opened_by_role,
+          reason: dbDeal.disputes[0].reason,
+          status: dbDeal.disputes[0].status,
+          resolvedAt: dbDeal.disputes[0].resolved_at?.toISOString() || '',
+          resolution: dbDeal.disputes[0].resolution || '',
+          createdAt: dbDeal.disputes[0].created_at.toISOString(),
+          updatedAt: dbDeal.disputes[0].updated_at.toISOString()
+        } : undefined
+      }));
       return { deals };
     } catch (error) {
       if (error instanceof RpcException) {
@@ -299,9 +332,41 @@ export class DealController {
 
   @ApiOperation({ summary: 'Get deal by ID', description: 'Gets a specific deal by its ID' })
   @GrpcMethod('DealService', 'GetDealById')
-  async getDealById(data: GetDealByIdRequest): Promise<any> {
+  async getDealById(data: GetDealByIdRequest): Promise<GetDealByIdResponse> {
     try {
-      const deal = await this.dealService.getDealById(data.dealId);
+      const dbDeal = await this.dealService.getDealById(data.dealId);
+      if (!dbDeal) {
+        return { deal: undefined };
+      }
+      const deal = {
+        id: dbDeal.id,
+        customerId: dbDeal.customer_id,
+        vendorId: dbDeal.vendor_id,
+        amount: dbDeal.amount,
+        description: dbDeal.description,
+        status: dbDeal.status,
+        initiator: dbDeal.initiator,
+        fundsReserved: dbDeal.funds_reserved,
+        createdAt: dbDeal.created_at.toISOString(),
+        acceptedAt: dbDeal.accepted_at?.toISOString() || '',
+        completedAt: dbDeal.completed_at?.toISOString() || '',
+        cancelledAt: dbDeal.cancelled_at?.toISOString() || '',
+        cancelledBy: dbDeal.cancelled_by || '',
+        declinedAt: dbDeal.declined_at?.toISOString() || '',
+        declinedBy: dbDeal.declined_by || '',
+        lastDispute: dbDeal.disputes[0] ? {
+          id: dbDeal.disputes[0].id,
+          dealId: dbDeal.disputes[0].deal_id,
+          openedBy: dbDeal.disputes[0].opened_by,
+          openedByRole: dbDeal.disputes[0].opened_by_role,
+          reason: dbDeal.disputes[0].reason,
+          status: dbDeal.disputes[0].status,
+          resolvedAt: dbDeal.disputes[0].resolved_at?.toISOString() || '',
+          resolution: dbDeal.disputes[0].resolution || '',
+          createdAt: dbDeal.disputes[0].created_at.toISOString(),
+          updatedAt: dbDeal.disputes[0].updated_at.toISOString()
+        } : undefined
+      };
       return { deal };
     } catch (error) {
       if (error instanceof RpcException) {

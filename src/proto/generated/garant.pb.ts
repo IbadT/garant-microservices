@@ -2,15 +2,16 @@
 // versions:
 //   protoc-gen-ts_proto  v2.7.0
 //   protoc               v5.29.3
-// source: src/proto/deal.proto
+// source: proto/garant.proto
 
 /* eslint-disable */
 import { Metadata } from "@grpc/grpc-js";
 import { GrpcMethod, GrpcStreamMethod } from "@nestjs/microservices";
 import { Observable } from "rxjs";
 
-export const protobufPackage = "deal";
+export const protobufPackage = "garant";
 
+/** Common Messages */
 export interface SendHelloRequest {
   message: string;
 }
@@ -19,6 +20,7 @@ export interface SendHelloResponse {
   message: string;
 }
 
+/** Deal Service Messages */
 export interface CreateDealRequest {
   initiatorId: string;
   targetId: string;
@@ -53,13 +55,13 @@ export interface ConfirmCompletionRequest {
   userId: string;
 }
 
-export interface OpenDisputeRequest {
+export interface OpenDealDisputeRequest {
   dealId: string;
   userId: string;
   reason: string;
 }
 
-export interface ResolveDisputeRequest {
+export interface ResolveDealDisputeRequest {
   dealId: string;
   disputeId: string;
   resolution: string;
@@ -101,6 +103,34 @@ export interface Deal {
   lastDispute: Dispute | undefined;
 }
 
+/** Disputes Service Messages */
+export interface OpenDisputeRequest {
+  dealId: string;
+  userId: string;
+  reason: string;
+}
+
+export interface ResolveDisputeRequest {
+  dealId: string;
+  disputeId: string;
+  resolution: string;
+  moderatorId: string;
+}
+
+export interface GetDisputeByIdRequest {
+  disputeId: string;
+}
+
+export interface GetDisputesByDealIdRequest {
+  dealId: string;
+}
+
+export interface DisputeResponse {
+  id: string;
+  status: string;
+  message: string;
+}
+
 export interface Dispute {
   id: string;
   dealId: string;
@@ -114,7 +144,17 @@ export interface Dispute {
   updatedAt: string;
 }
 
-export const DEAL_PACKAGE_NAME = "deal";
+export interface GetDisputeByIdResponse {
+  dispute: Dispute | undefined;
+}
+
+export interface GetDisputesByDealIdResponse {
+  disputes: Dispute[];
+}
+
+export const GARANT_PACKAGE_NAME = "garant";
+
+/** Deal Service */
 
 export interface DealServiceClient {
   createDeal(request: CreateDealRequest, metadata?: Metadata): Observable<DealResponse>;
@@ -127,9 +167,9 @@ export interface DealServiceClient {
 
   confirmCompletion(request: ConfirmCompletionRequest, metadata?: Metadata): Observable<DealResponse>;
 
-  openDispute(request: OpenDisputeRequest, metadata?: Metadata): Observable<DealResponse>;
+  openDealDispute(request: OpenDealDisputeRequest, metadata?: Metadata): Observable<DealResponse>;
 
-  resolveDispute(request: ResolveDisputeRequest, metadata?: Metadata): Observable<DealResponse>;
+  resolveDealDispute(request: ResolveDealDisputeRequest, metadata?: Metadata): Observable<DealResponse>;
 
   getActiveDeals(request: GetActiveDealsRequest, metadata?: Metadata): Observable<GetActiveDealsResponse>;
 
@@ -137,6 +177,8 @@ export interface DealServiceClient {
 
   sendHello(request: SendHelloRequest, metadata?: Metadata): Observable<SendHelloResponse>;
 }
+
+/** Deal Service */
 
 export interface DealServiceController {
   createDeal(
@@ -164,13 +206,13 @@ export interface DealServiceController {
     metadata?: Metadata,
   ): Promise<DealResponse> | Observable<DealResponse> | DealResponse;
 
-  openDispute(
-    request: OpenDisputeRequest,
+  openDealDispute(
+    request: OpenDealDisputeRequest,
     metadata?: Metadata,
   ): Promise<DealResponse> | Observable<DealResponse> | DealResponse;
 
-  resolveDispute(
-    request: ResolveDisputeRequest,
+  resolveDealDispute(
+    request: ResolveDealDisputeRequest,
     metadata?: Metadata,
   ): Promise<DealResponse> | Observable<DealResponse> | DealResponse;
 
@@ -198,8 +240,8 @@ export function DealServiceControllerMethods() {
       "declineDeal",
       "cancelDeal",
       "confirmCompletion",
-      "openDispute",
-      "resolveDispute",
+      "openDealDispute",
+      "resolveDealDispute",
       "getActiveDeals",
       "getDealById",
       "sendHello",
@@ -217,3 +259,59 @@ export function DealServiceControllerMethods() {
 }
 
 export const DEAL_SERVICE_NAME = "DealService";
+
+/** Disputes Service */
+
+export interface DisputesServiceClient {
+  openDispute(request: OpenDisputeRequest, metadata?: Metadata): Observable<DisputeResponse>;
+
+  resolveDispute(request: ResolveDisputeRequest, metadata?: Metadata): Observable<DisputeResponse>;
+
+  getDisputeById(request: GetDisputeByIdRequest, metadata?: Metadata): Observable<GetDisputeByIdResponse>;
+
+  getDisputesByDealId(
+    request: GetDisputesByDealIdRequest,
+    metadata?: Metadata,
+  ): Observable<GetDisputesByDealIdResponse>;
+}
+
+/** Disputes Service */
+
+export interface DisputesServiceController {
+  openDispute(
+    request: OpenDisputeRequest,
+    metadata?: Metadata,
+  ): Promise<DisputeResponse> | Observable<DisputeResponse> | DisputeResponse;
+
+  resolveDispute(
+    request: ResolveDisputeRequest,
+    metadata?: Metadata,
+  ): Promise<DisputeResponse> | Observable<DisputeResponse> | DisputeResponse;
+
+  getDisputeById(
+    request: GetDisputeByIdRequest,
+    metadata?: Metadata,
+  ): Promise<GetDisputeByIdResponse> | Observable<GetDisputeByIdResponse> | GetDisputeByIdResponse;
+
+  getDisputesByDealId(
+    request: GetDisputesByDealIdRequest,
+    metadata?: Metadata,
+  ): Promise<GetDisputesByDealIdResponse> | Observable<GetDisputesByDealIdResponse> | GetDisputesByDealIdResponse;
+}
+
+export function DisputesServiceControllerMethods() {
+  return function (constructor: Function) {
+    const grpcMethods: string[] = ["openDispute", "resolveDispute", "getDisputeById", "getDisputesByDealId"];
+    for (const method of grpcMethods) {
+      const descriptor: any = Reflect.getOwnPropertyDescriptor(constructor.prototype, method);
+      GrpcMethod("DisputesService", method)(constructor.prototype[method], method, descriptor);
+    }
+    const grpcStreamMethods: string[] = [];
+    for (const method of grpcStreamMethods) {
+      const descriptor: any = Reflect.getOwnPropertyDescriptor(constructor.prototype, method);
+      GrpcStreamMethod("DisputesService", method)(constructor.prototype[method], method, descriptor);
+    }
+  };
+}
+
+export const DISPUTES_SERVICE_NAME = "DisputesService";

@@ -3,7 +3,7 @@ import { loadPackageDefinition } from '@grpc/grpc-js';
 import { loadSync } from '@grpc/proto-loader';
 import { join } from 'path';
 
-const PROTO_PATH = join(__dirname, 'proto/deal.proto');
+const PROTO_PATH = join(__dirname, 'proto/garant.proto');
 
 const packageDefinition = loadSync(PROTO_PATH, {
   keepCase: true,
@@ -13,16 +13,28 @@ const packageDefinition = loadSync(PROTO_PATH, {
   oneofs: true,
 });
 
-const protoDescriptor = loadPackageDefinition(packageDefinition) as any;
-const dealService = protoDescriptor.deal.DealService;
+interface ProtoDescriptor {
+  garant: {
+    DealService: any;
+  };
+}
 
-const client = new dealService(
+const protoDescriptor = loadPackageDefinition(packageDefinition) as unknown as ProtoDescriptor;
+const DealService = protoDescriptor.garant.DealService;
+
+if (!DealService) {
+  console.error('Error: DealService not found in the proto descriptor');
+  process.exit(1);
+}
+
+const client = new DealService(
   'localhost:50051',
   credentials.createInsecure()
 );
 
 async function testSendHello() {
   return new Promise((resolve, reject) => {
+    console.log('Sending hello request...');
     const request = {
       message: 'Hello from gRPC client!'
     };
@@ -48,7 +60,9 @@ async function runTest() {
   } catch (error) {
     console.error('Test failed:', error);
   } finally {
-    client.close();
+    if (client && typeof client.close === 'function') {
+      client.close();
+    }
   }
 }
 
