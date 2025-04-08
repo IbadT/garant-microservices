@@ -22,12 +22,12 @@ export class ResolveDisputeDto {
   
   @ApiProperty({
     description: 'Resolution of the dispute',
-    example: 'CUSTOMER_WON',
-    enum: ['CUSTOMER_WON', 'VENDOR_WON']
+    example: 'CUSTOMER_WIN',
+    enum: ['CUSTOMER_WIN', 'VENDOR_WIN']
   })
   @IsString()
   @IsNotEmpty({ message: 'Resolution cannot be empty' })
-  @IsIn(['CUSTOMER_WON', 'VENDOR_WON'], { message: 'Resolution must be either CUSTOMER_WON or VENDOR_WON' })
+  @IsIn(['CUSTOMER_WIN', 'VENDOR_WIN'], { message: 'Resolution must be either CUSTOMER_WIN or VENDOR_WIN' })
   resolution: string;
   
   @ApiProperty({

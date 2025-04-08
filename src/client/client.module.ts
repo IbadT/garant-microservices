@@ -6,7 +6,7 @@ import { DisputesClient } from './disputes.client';
 import { DealsController } from './client.controller';
 import { DisputesController } from './client.controller';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-
+import { KafkaService } from '../kafka/kafka.service';
 
 @Module({
   imports: [
@@ -40,7 +40,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
     ]),
   ],
   controllers: [DealsController, DisputesController],
-  providers: [DealsClient, DisputesClient],
+  providers: [DealsClient, DisputesClient, KafkaService],
   exports: [DealsClient, DisputesClient],
 })
 export class ClientModule {} 

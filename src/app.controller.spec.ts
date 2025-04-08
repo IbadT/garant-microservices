@@ -13,7 +13,7 @@ describe('AppController', () => {
         {
           provide: AppService,
           useValue: {
-            getHello: jest.fn().mockReturnValue('Hello World!'),
+            getHello: jest.fn().mockImplementation((num: number) => `Hello World! Number: ${num}`),
           },
         },
       ],
@@ -24,15 +24,17 @@ describe('AppController', () => {
   });
 
   describe('getHello', () => {
-    it('should return "Hello World!"', () => {
-      expect(appController.getHello()).toBe('Hello World!');
+    it('should return "Hello World! Number: 1"', () => {
+      const result = appController.getHello();
+      expect(result).toBe('Hello World! Number: 1');
       expect(appService.getHello).toHaveBeenCalledWith(1);
     });
   });
 
   describe('getError', () => {
-    it('should throw an error', () => {
+    it('should throw an error with specific message', () => {
       expect(() => appController.getError()).toThrow('My first Sentry error!');
+      expect(() => appController.getError()).toThrow(Error);
     });
   });
 });

@@ -1,15 +1,12 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, BadRequestException } from '@nestjs/common';
 import { CreateDisputeDto } from './dto/create-dispute.dto';
 import { UpdateDisputeDto } from './dto/update-dispute.dto';
-import { PrismaService } from 'src/prisma.service';
+import { PrismaService } from '../prisma.service';
 import { DisputeStatus, UserRole } from '@prisma/client';
-import { BadRequestException } from '@nestjs/common';
 
 @Injectable()
 export class DisputesService {
-
-
-  constructor(private prisma: PrismaService) {} // Добавлен PrismaService
+  constructor(private readonly prisma: PrismaService) {}
 
   async deleteDispute(id: string) {
     return this.prisma.$transaction(async (tx) => {
@@ -19,19 +16,11 @@ export class DisputesService {
     });
   }
 
-  // пример метода для открытого спора
   async openDispute(dealId: string, userId: string, reason: string) {
     return this.prisma.$transaction(async (tx) => {
-      const deal = await tx.deal.findUnique({ 
+      const deal = await tx.deal.findUnique({
         where: { id: dealId },
-        include: {
-          disputes: {
-            orderBy: {
-              created_at: 'desc',
-            },
-            take: 1,
-          },
-        },
+        include: { disputes: true },
       });
       
       if (!deal) {
@@ -39,31 +28,36 @@ export class DisputesService {
       }
       
       // Проверка прав
-      if (deal.customer_id !== userId && deal.vendor_id !== userId) {
-        throw new BadRequestException('Not a participant');
+      const isCustomer = deal.customer_id === userId;
+      const isVendor = deal.vendor_id === userId;
+      
+      if (!isCustomer && !isVendor) {
+        throw new BadRequestException('Only deal participants can open disputes');
       }
-  
-      // Определяем роль пользователя
-      const userRole = deal.customer_id === userId ? UserRole.CUSTOMER : UserRole.VENDOR;
-
-      // Проверяем, не открыт ли уже спор
-      const lastDispute = deal.disputes[0];
-      if (lastDispute && lastDispute.status === DisputeStatus.PENDING) {
-        throw new BadRequestException('A dispute is already open for this deal');
+      
+      // Проверка статуса
+      if (deal.status !== 'ACTIVE') {
+        throw new BadRequestException('Can only open disputes for active deals');
       }
-  
-      // Обновление статуса сделки
+      
+      // Проверка на существующие споры
+      const hasOpenDispute = deal.disputes.some(d => d.status === DisputeStatus.PENDING);
+      if (hasOpenDispute) {
+        throw new BadRequestException('Deal already has an open dispute');
+      }
+      
+      // Обновляем статус сделки
       await tx.deal.update({
         where: { id: dealId },
         data: { status: 'DISPUTED' },
       });
-  
-      // Создание спора
+      
+      // Создаем спор
       const dispute = await tx.dispute.create({
         data: {
           deal_id: dealId,
           opened_by: userId,
-          opened_by_role: userRole,
+          opened_by_role: isCustomer ? 'CUSTOMER' : 'VENDOR',
           reason,
           status: DisputeStatus.PENDING,
         },
@@ -72,78 +66,73 @@ export class DisputesService {
       return {
         id: dispute.id,
         status: dispute.status,
-        message: 'Dispute opened successfully'
+        message: 'Dispute opened successfully',
       };
     });
   }
 
   async resolveDispute(dealId: string, disputeId: string, resolution: string, moderatorId: string) {
     return this.prisma.$transaction(async (tx) => {
-      const dispute = await tx.dispute.findUnique({
-        where: { id: disputeId },
-        include: {
-          deal: true,
-        },
-      });
+      const [dispute, moderator] = await Promise.all([
+        tx.dispute.findUnique({
+          where: { id: disputeId },
+        }),
+        tx.user.findUnique({
+          where: { id: moderatorId },
+        }),
+      ]);
 
       if (!dispute) {
         throw new BadRequestException('Dispute not found');
       }
 
-      if (dispute.deal_id !== dealId) {
-        throw new BadRequestException('Dispute does not belong to this deal');
+      if (!moderator || moderator.role !== UserRole.MODERATOR) {
+        throw new BadRequestException('Only moderators can resolve disputes');
       }
 
       if (dispute.status === DisputeStatus.RESOLVED) {
         throw new BadRequestException('Dispute is already resolved');
       }
 
-      // Проверяем, что пользователь является модератором
-      const moderator = await tx.user.findUnique({
-        where: { id: moderatorId },
-        select: { role: true },
-      });
-
-      if (!moderator || (moderator.role !== UserRole.ADMIN && moderator.role !== UserRole.MODERATOR)) {
-        throw new BadRequestException('Only moderators can resolve disputes');
-      }
-
-      // Обновляем статус спора
       const updatedDispute = await tx.dispute.update({
         where: { id: disputeId },
         data: {
           status: DisputeStatus.RESOLVED,
-          resolved_at: new Date(),
           resolution,
+          resolved_at: new Date(),
         },
       });
 
       return {
         id: updatedDispute.id,
         status: updatedDispute.status,
-        message: 'Dispute resolved successfully'
+        message: 'Dispute resolved successfully',
       };
     });
   }
 
   async getDisputeById(disputeId: string) {
-    const dispute = await this.prisma.dispute.findUnique({
-      where: { id: disputeId },
+    return this.prisma.$transaction(async (tx) => {
+      const dispute = await tx.dispute.findUnique({
+        where: { id: disputeId },
+      });
+
+      if (!dispute) {
+        throw new BadRequestException('Dispute not found');
+      }
+
+      return { dispute };
     });
-
-    if (!dispute) {
-      throw new BadRequestException('Dispute not found');
-    }
-
-    return { dispute };
   }
 
   async getDisputesByDealId(dealId: string) {
-    const disputes = await this.prisma.dispute.findMany({
-      where: { deal_id: dealId },
-      orderBy: { created_at: 'desc' },
-    });
+    return this.prisma.$transaction(async (tx) => {
+      const disputes = await tx.dispute.findMany({
+        where: { deal_id: dealId },
+        orderBy: { created_at: 'desc' },
+      });
 
-    return { disputes };
+      return { disputes };
+    });
   }
 }

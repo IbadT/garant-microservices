@@ -33,19 +33,17 @@ import { ResolveDisputeDto } from './dto/resolve-dispute.dto';
 export class DealController {
   constructor(private readonly dealService: DealService) {}
 
-  @ApiOperation({ summary: 'Create deal', description: 'Creates a new deal' })
+  @ApiOperation({ summary: 'Create deal', description: 'Creates a new deal initiated by either customer or vendor' })
   @GrpcMethod('DealService', 'CreateDeal')
   async createDeal(data: CreateDealRequest): Promise<DealResponse> {
     try {
-      // Валидация входных данных
       const createDealDto = new CreateDealDto();
       Object.assign(createDealDto, data);
       
-      // Проверка валидации
       const errors = await this.validateDto(createDealDto);
       if (errors.length > 0) {
         throw new RpcException({
-          code: 3, // INVALID_ARGUMENT
+          code: 3,
           message: JSON.stringify(errors)
         });
       }
@@ -61,25 +59,23 @@ export class DealController {
         throw error;
       }
       throw new RpcException({
-        code: 13, // INTERNAL
+        code: 13,
         message: error.message || 'Internal server error'
       });
     }
   }
 
-  @ApiOperation({ summary: 'Accept deal', description: 'Accepts an existing deal' })
+  @ApiOperation({ summary: 'Accept deal', description: 'Accepts an existing deal by either customer or vendor' })
   @GrpcMethod('DealService', 'AcceptDeal')
   async acceptDeal(data: AcceptDealRequest): Promise<DealResponse> {
     try {
-      // Валидация входных данных
       const acceptDealDto = new AcceptDealDto();
       Object.assign(acceptDealDto, data);
       
-      // Проверка валидации
       const errors = await this.validateDto(acceptDealDto);
       if (errors.length > 0) {
         throw new RpcException({
-          code: 3, // INVALID_ARGUMENT
+          code: 3,
           message: JSON.stringify(errors)
         });
       }
@@ -95,25 +91,23 @@ export class DealController {
         throw error;
       }
       throw new RpcException({
-        code: 13, // INTERNAL
+        code: 13,
         message: error.message || 'Internal server error'
       });
     }
   }
 
-  @ApiOperation({ summary: 'Decline deal', description: 'Declines an existing deal' })
+  @ApiOperation({ summary: 'Decline deal', description: 'Declines an existing deal by either customer or vendor' })
   @GrpcMethod('DealService', 'DeclineDeal')
   async declineDeal(data: DeclineDealRequest): Promise<DealResponse> {
     try {
-      // Валидация входных данных
       const declineDealDto = new DeclineDealDto();
       Object.assign(declineDealDto, data);
       
-      // Проверка валидации
       const errors = await this.validateDto(declineDealDto);
       if (errors.length > 0) {
         throw new RpcException({
-          code: 3, // INVALID_ARGUMENT
+          code: 3,
           message: JSON.stringify(errors)
         });
       }
@@ -129,25 +123,23 @@ export class DealController {
         throw error;
       }
       throw new RpcException({
-        code: 13, // INTERNAL
+        code: 13,
         message: error.message || 'Internal server error'
       });
     }
   }
 
-  @ApiOperation({ summary: 'Cancel deal', description: 'Cancels an existing deal' })
+  @ApiOperation({ summary: 'Cancel deal', description: 'Cancels an existing deal by either customer or vendor' })
   @GrpcMethod('DealService', 'CancelDeal')
   async cancelDeal(data: CancelDealRequest): Promise<DealResponse> {
     try {
-      // Валидация входных данных
       const cancelDealDto = new CancelDealDto();
       Object.assign(cancelDealDto, data);
       
-      // Проверка валидации
       const errors = await this.validateDto(cancelDealDto);
       if (errors.length > 0) {
         throw new RpcException({
-          code: 3, // INVALID_ARGUMENT
+          code: 3,
           message: JSON.stringify(errors)
         });
       }
@@ -163,25 +155,23 @@ export class DealController {
         throw error;
       }
       throw new RpcException({
-        code: 13, // INTERNAL
+        code: 13,
         message: error.message || 'Internal server error'
       });
     }
   }
 
-  @ApiOperation({ summary: 'Confirm completion', description: 'Confirms completion of a deal' })
+  @ApiOperation({ summary: 'Confirm completion', description: 'Confirms completion of a deal by the customer' })
   @GrpcMethod('DealService', 'ConfirmCompletion')
   async confirmCompletion(data: ConfirmCompletionRequest): Promise<DealResponse> {
     try {
-      // Валидация входных данных
       const confirmCompletionDto = new ConfirmCompletionDto();
       Object.assign(confirmCompletionDto, data);
       
-      // Проверка валидации
       const errors = await this.validateDto(confirmCompletionDto);
       if (errors.length > 0) {
         throw new RpcException({
-          code: 3, // INVALID_ARGUMENT
+          code: 3,
           message: JSON.stringify(errors)
         });
       }
@@ -197,25 +187,23 @@ export class DealController {
         throw error;
       }
       throw new RpcException({
-        code: 13, // INTERNAL
+        code: 13,
         message: error.message || 'Internal server error'
       });
     }
   }
 
-  @ApiOperation({ summary: 'Open dispute', description: 'Opens a dispute for a deal' })
-  @GrpcMethod('DealService', 'OpenDispute')
+  @ApiOperation({ summary: 'Open dispute', description: 'Opens a dispute for a deal by either customer or vendor' })
+  @GrpcMethod('DealService', 'OpenDealDispute')
   async openDispute(data: OpenDisputeRequest): Promise<DealResponse> {
     try {
-      // Валидация входных данных
       const openDisputeDto = new OpenDisputeDto();
       Object.assign(openDisputeDto, data);
       
-      // Проверка валидации
       const errors = await this.validateDto(openDisputeDto);
       if (errors.length > 0) {
         throw new RpcException({
-          code: 3, // INVALID_ARGUMENT
+          code: 3,
           message: JSON.stringify(errors)
         });
       }
@@ -231,33 +219,31 @@ export class DealController {
         throw error;
       }
       throw new RpcException({
-        code: 13, // INTERNAL
+        code: 13,
         message: error.message || 'Internal server error'
       });
     }
   }
 
-  @ApiOperation({ summary: 'Resolve dispute', description: 'Resolves a dispute for a deal' })
-  @GrpcMethod('DealService', 'ResolveDispute')
+  @ApiOperation({ summary: 'Resolve dispute', description: 'Resolves a dispute for a deal by a moderator' })
+  @GrpcMethod('DealService', 'ResolveDealDispute')
   async resolveDispute(data: ResolveDisputeRequest): Promise<DealResponse> {
     try {
-      // Валидация входных данных
       const resolveDisputeDto = new ResolveDisputeDto();
       Object.assign(resolveDisputeDto, data);
       
-      // Проверка валидации
       const errors = await this.validateDto(resolveDisputeDto);
       if (errors.length > 0) {
         throw new RpcException({
-          code: 3, // INVALID_ARGUMENT
+          code: 3,
           message: JSON.stringify(errors)
         });
       }
       
       const result = await this.dealService.resolveDispute(
-        data.dealId, 
-        data.disputeId, 
-        data.resolution, 
+        data.dealId,
+        data.disputeId,
+        data.resolution,
         data.moderatorId
       );
       return {
@@ -270,7 +256,7 @@ export class DealController {
         throw error;
       }
       throw new RpcException({
-        code: 13, // INTERNAL
+        code: 13,
         message: error.message || 'Internal server error'
       });
     }
@@ -287,13 +273,13 @@ export class DealController {
         throw error;
       }
       throw new RpcException({
-        code: 13, // INTERNAL
+        code: 13,
         message: error.message || 'Internal server error'
       });
     }
   }
 
-  @ApiOperation({ summary: 'Get deal by ID', description: 'Gets a deal by its ID' })
+  @ApiOperation({ summary: 'Get deal by ID', description: 'Gets a specific deal by its ID' })
   @GrpcMethod('DealService', 'GetDealById')
   async getDealById(data: GetDealByIdRequest): Promise<any> {
     try {
@@ -304,7 +290,7 @@ export class DealController {
         throw error;
       }
       throw new RpcException({
-        code: 13, // INTERNAL
+        code: 13,
         message: error.message || 'Internal server error'
       });
     }
@@ -344,20 +330,8 @@ export class DealController {
   
   // Вспомогательный метод для валидации DTO
   private async validateDto(dto: any): Promise<string[]> {
-    const errors: string[] = [];
-    const validationErrors = await validate(dto);
-    
-    if (validationErrors.length > 0) {
-      validationErrors.forEach(error => {
-        if (error.constraints) {
-          Object.values(error.constraints).forEach(constraint => {
-            errors.push(constraint as string);
-          });
-        }
-      });
-    }
-    
-    return errors;
+    const errors = await validate(dto);
+    return errors.map(error => error.constraints ? Object.values(error.constraints) : []).flat();
   }
 };
 

@@ -15,6 +15,8 @@ enum UserRole {
 
 @Injectable()
 export class DealService implements OnModuleInit {
+  private readonly DEAL_AUTO_ACCEPT_TIMEOUT = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+
   constructor(
     private prisma: PrismaService,
     private kafka: KafkaService,
@@ -26,11 +28,35 @@ export class DealService implements OnModuleInit {
     await this.kafka.connect();
     // Затем подписываемся на обновления
     await this.kafka.subscribeToDealUpdates(this.handleDealUpdate.bind(this));
+    // Start checking for auto-accept deals
+    this.startAutoAcceptCheck();
   }
 
   private async handleDealUpdate(message: any) {
     // Обработка событий из Kafka
     console.log('Received Kafka message:', message);
+  }
+
+  private async startAutoAcceptCheck() {
+    setInterval(async () => {
+      try {
+        const pendingDeals = await this.prisma.deal.findMany({
+          where: {
+            status: DealStatus.PENDING,
+            initiator: DealInitiator.VENDOR,
+            created_at: {
+              lt: new Date(Date.now() - this.DEAL_AUTO_ACCEPT_TIMEOUT)
+            }
+          }
+        });
+
+        for (const deal of pendingDeals) {
+          await this.acceptDeal(deal.id, deal.customer_id);
+        }
+      } catch (error) {
+        console.error('Error in auto-accept check:', error);
+      }
+    }, 5 * 60 * 1000); // Check every 5 minutes
   }
 
   async createDeal(data: CreateDealRequest) {
@@ -50,6 +76,7 @@ export class DealService implements OnModuleInit {
           status: DealStatus.PENDING,
           initiator: data.isCustomerInitiator ? DealInitiator.CUSTOMER : DealInitiator.VENDOR,
           funds_reserved: data.isCustomerInitiator,
+          created_at: new Date(),
         },
       });
 
@@ -359,14 +386,7 @@ export class DealService implements OnModuleInit {
     return this.prisma.$transaction(async (tx) => {
       const deal = await tx.deal.findUnique({
         where: { id: dealId },
-        include: {
-          disputes: {
-            orderBy: {
-              created_at: 'desc',
-            },
-            take: 1,
-          },
-        },
+        include: { disputes: true },
       });
 
       if (!deal) {
@@ -375,27 +395,25 @@ export class DealService implements OnModuleInit {
 
       const { isCustomer, isVendor } = this.validateDealAction(deal, userId, 'dispute');
 
-      // Определяем роль пользователя, открывающего спор
-      const userRole = isCustomer ? UserRole.CUSTOMER : UserRole.VENDOR;
-
-      // Проверяем, не открыт ли уже спор
-      const lastDispute = deal.disputes[0];
-      if (lastDispute && lastDispute.status === DisputeStatus.PENDING) {
-        throw new BadRequestException('A dispute is already open for this deal');
+      // Check if there's already an active dispute
+      const activeDispute = deal.disputes.find(d => d.status === DisputeStatus.PENDING);
+      if (activeDispute) {
+        throw new BadRequestException('There is already an active dispute for this deal');
       }
 
-      // Создаем новый спор
+      // Create new dispute
       const dispute = await tx.dispute.create({
         data: {
           deal_id: dealId,
           opened_by: userId,
-          opened_by_role: userRole,
-          reason,
+          opened_by_role: isCustomer ? UserRole.CUSTOMER : UserRole.VENDOR,
+          reason: reason,
           status: DisputeStatus.PENDING,
+          created_at: new Date(),
         },
       });
 
-      // Обновляем статус сделки
+      // Update deal status
       const updatedDeal = await tx.deal.update({
         where: { id: dealId },
         data: {
@@ -405,116 +423,88 @@ export class DealService implements OnModuleInit {
 
       await this.kafka.sendDealEvent({
         type: 'DISPUTE_OPENED',
-        payload: {
-          deal: updatedDeal,
-          dispute,
-        },
+        payload: { deal: updatedDeal, dispute },
       });
 
-      // Уведомляем другую сторону
-      await this.notification.notifyUser(
-        isCustomer ? deal.vendor_id : deal.customer_id,
-        {
-          type: 'DISPUTE_OPENED',
-          dealId: deal.id,
-          disputeId: dispute.id,
-        }
-      );
+      // Notify the other party
+      const notifyUserId = isCustomer ? deal.vendor_id : deal.customer_id;
+      await this.notification.notifyUser(notifyUserId, {
+        type: 'DISPUTE_OPENED',
+        dealId: deal.id,
+        disputeId: dispute.id,
+      });
 
-      return {
-        deal: updatedDeal,
-        dispute,
-      };
+      return { deal: updatedDeal, dispute };
     });
   }
 
   async resolveDispute(dealId: string, disputeId: string, resolution: string, moderatorId: string) {
     return this.prisma.$transaction(async (tx) => {
-      const dispute = await tx.dispute.findUnique({
-        where: { id: disputeId },
-        include: {
-          deal: true,
-        },
+      const deal = await tx.deal.findUnique({
+        where: { id: dealId },
+        include: { disputes: true },
       });
 
+      if (!deal) {
+        throw new BadRequestException('Deal not found');
+      }
+
+      const dispute = deal.disputes.find(d => d.id === disputeId);
       if (!dispute) {
         throw new BadRequestException('Dispute not found');
       }
 
-      if (dispute.deal_id !== dealId) {
-        throw new BadRequestException('Dispute does not belong to this deal');
+      if (dispute.status !== DisputeStatus.PENDING) {
+        throw new BadRequestException('Dispute is not active');
       }
 
-      if (dispute.status === DisputeStatus.RESOLVED) {
-        throw new BadRequestException('Dispute is already resolved');
-      }
-      // Проверяем, что пользователь является модератором
-      const moderator = await tx.user.findUnique({
-        where: { id: moderatorId },
-        select: { role: true },
-      });
-
-      if (!moderator || (moderator.role !== UserRole.ADMIN && moderator.role !== UserRole.MODERATOR)) {
-        throw new BadRequestException('Only moderators can resolve disputes');
-      }
-
-      // Обновляем статус спора
-      const updatedDispute = await tx.dispute.update({
+      // Update dispute status
+      await tx.dispute.update({
         where: { id: disputeId },
         data: {
           status: DisputeStatus.RESOLVED,
+          resolution: resolution,
           resolved_at: new Date(),
-          resolution,
         },
       });
 
-      // Обновляем статус сделки в зависимости от резолюции
-      let dealStatus = DealStatus.CANCELLED;
-      if (resolution === 'CUSTOMER_WON') {
-        // Возвращаем средства покупателю
-        await this.releaseFunds(dispute.deal.customer_id, dispute.deal.amount, tx);
-      } else if (resolution === 'VENDOR_WON') {
-        // Переводим средства продавцу
-        await this.transferFundsToVendor(dispute.deal, tx);
-        dealStatus = DealStatus.CANCELLED;
+      // Handle funds based on resolution
+      if (resolution === 'VENDOR_WIN') {
+        await this.transferFundsToVendor(deal, tx);
+      } else if (resolution === 'CUSTOMER_WIN' && deal.funds_reserved) {
+        await this.releaseFunds(deal.customer_id, deal.amount, tx);
       }
 
+      // Update deal status
       const updatedDeal = await tx.deal.update({
         where: { id: dealId },
         data: {
-          status: dealStatus,
-          completed_at: resolution === 'VENDOR_WON' ? new Date() : null,
-          cancelled_at: resolution !== 'VENDOR_WON' ? new Date() : null,
+          status: DealStatus.COMPLETED,
+          completed_at: new Date(),
         },
       });
 
       await this.kafka.sendDealEvent({
         type: 'DISPUTE_RESOLVED',
-        payload: {
-          deal: updatedDeal,
-          dispute: updatedDispute,
-        },
+        payload: { deal: updatedDeal, dispute },
       });
 
-      // Уведомляем обе стороны
-      await this.notification.notifyUser(dispute.deal.customer_id, {
+      // Notify both parties
+      await this.notification.notifyUser(deal.customer_id, {
         type: 'DISPUTE_RESOLVED',
-        dealId: dealId,
-        disputeId: disputeId,
+        dealId: deal.id,
+        disputeId: dispute.id,
         resolution,
       });
 
-      await this.notification.notifyUser(dispute.deal.vendor_id, {
+      await this.notification.notifyUser(deal.vendor_id, {
         type: 'DISPUTE_RESOLVED',
-        dealId: dealId,
-        disputeId: disputeId,
+        dealId: deal.id,
+        disputeId: dispute.id,
         resolution,
       });
 
-      return {
-        deal: updatedDeal,
-        dispute: updatedDispute,
-      };
+      return { deal: updatedDeal, dispute };
     });
   }
 

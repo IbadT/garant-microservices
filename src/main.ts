@@ -99,7 +99,7 @@ async function bootstrap() {
 
   logger.log(`Application is running on: ${await app.getUrl()}`);
   logger.log(`Environment: ${NODE_ENV}`);
-  logger.log(`Swagger documentation is available at: ${await app.getUrl()}/api/docs`);
+  logger.log(`Swagger documentation is available at: ${await app.getUrl()}/api`);
 
   if(module.hot) {
     module.hot.accept();

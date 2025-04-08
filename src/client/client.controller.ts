@@ -28,24 +28,22 @@ import {
   SendHelloRequest,
   OpenDisputeRequest,
   ResolveDisputeRequest,
-} from './deals.client';
+} from '../deals/interfaces/deal.interface';
 import {
   OpenDisputeRequest as DisputeOpenDisputeRequest,
   ResolveDisputeRequest as DisputeResolveDisputeRequest,
   GetDisputeByIdRequest,
   GetDisputesByDealIdRequest,
-} from './disputes.client';
+} from '../disputes/interfaces/dispute.interface';
+import { KafkaService } from '../kafka/kafka.service';
 
 @ApiTags('Deals')
 @Controller('deals')
 export class DealsController {
-  constructor(private readonly dealsClient: DealsClient) {}
-
-  @Post('hello')
-  @ApiSendHello()
-  async sendHello(@Body() data: SendHelloRequest) {
-    return this.dealsClient.sendHello(data);
-  }
+  constructor(
+    private readonly dealsClient: DealsClient,
+    private readonly kafkaService: KafkaService
+  ) {}
 
   @Post('create')
   @ApiCreateDeal()
@@ -99,6 +97,15 @@ export class DealsController {
   @ApiGetDealById()
   async getDealById(@Body() data: GetDealByIdRequest) {
     return this.dealsClient.getDealById(data);
+  }
+
+  @Post('test-kafka')
+  async testKafka() {
+    await this.kafkaService.sendDealEvent({
+      type: 'TEST',
+      payload: { message: 'This is a test message', timestamp: new Date().toISOString() }
+    });
+    return { success: true, message: 'Test message sent to Kafka' };
   }
 }
 
