@@ -1,11 +1,20 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { CreateDisputeDto } from './dto/create-dispute.dto';
 import { UpdateDisputeDto } from './dto/update-dispute.dto';
-import { PrismaService } from '../prisma.service';
+// import { PrismaService } from '../prisma/prisma.service';
+import { PrismaService } from 'src/prisma.service';
 import { DisputeStatus, UserRole } from '@prisma/client';
 
+/**
+ * Сервис для работы со спорами
+ * Предоставляет методы для управления спорами в системе
+ */
 @Injectable()
 export class DisputesService {
+  /**
+   * Создает экземпляр DisputesService
+   * @param prisma - Сервис для работы с базой данных
+   */
   constructor(private readonly prisma: PrismaService) {}
 
   async deleteDispute(id: string) {
@@ -16,6 +25,14 @@ export class DisputesService {
     });
   }
 
+  /**
+   * Открывает новый спор
+   * @param dealId - Идентификатор сделки
+   * @param userId - Идентификатор пользователя
+   * @param reason - Причина открытия спора
+   * @returns {Promise<{id: string, status: DisputeStatus, message: string}>} Результат открытия спора
+   * @throws {BadRequestException} Если сделка не найдена или уже есть активный спор
+   */
   async openDispute(dealId: string, userId: string, reason: string) {
     return this.prisma.$transaction(async (tx) => {
       const deal = await tx.deal.findUnique({
@@ -71,6 +88,15 @@ export class DisputesService {
     });
   }
 
+  /**
+   * Разрешает существующий спор
+   * @param dealId - Идентификатор сделки
+   * @param disputeId - Идентификатор спора
+   * @param resolution - Решение по спору
+   * @param moderatorId - Идентификатор модератора
+   * @returns {Promise<{id: string, status: DisputeStatus, message: string}>} Результат разрешения спора
+   * @throws {BadRequestException} Если спор не найден, уже разрешен или пользователь не является модератором
+   */
   async resolveDispute(dealId: string, disputeId: string, resolution: string, moderatorId: string) {
     return this.prisma.$transaction(async (tx) => {
       const [dispute, moderator] = await Promise.all([
@@ -111,6 +137,12 @@ export class DisputesService {
     });
   }
 
+  /**
+   * Получает спор по идентификатору
+   * @param disputeId - Идентификатор спора
+   * @returns {Promise<{dispute: {id: string, deal_id: string, opened_by: string, opened_by_role: string, reason: string, status: DisputeStatus, resolved_at: Date, resolution: string, created_at: Date, updated_at: Date}}>} Найденный спор
+   * @throws {BadRequestException} Если спор не найден
+   */
   async getDisputeById(disputeId: string) {
     return this.prisma.$transaction(async (tx) => {
       const dispute = await tx.dispute.findUnique({
@@ -125,6 +157,11 @@ export class DisputesService {
     });
   }
 
+  /**
+   * Получает список споров по идентификатору сделки
+   * @param dealId - Идентификатор сделки
+   * @returns {Promise<{disputes: Array<{id: string, deal_id: string, opened_by: string, opened_by_role: string, reason: string, status: DisputeStatus, resolved_at: Date, resolution: string, created_at: Date, updated_at: Date}>}>} Список споров
+   */
   async getDisputesByDealId(dealId: string) {
     return this.prisma.$transaction(async (tx) => {
       const disputes = await tx.dispute.findMany({

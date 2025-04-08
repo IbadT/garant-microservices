@@ -3,10 +3,23 @@ import { DisputesService } from './disputes.service';
 import { GrpcMethod } from '@nestjs/microservices';
 import { DisputeStatus } from '@prisma/client';
 
+/**
+ * Контроллер для работы со спорами через gRPC
+ * Предоставляет методы для управления спорами в системе
+ */
 @Controller()
 export class DisputesController {
+  /**
+   * Создает экземпляр DisputesController
+   * @param disputesService - Сервис для работы со спорами
+   */
   constructor(private readonly disputesService: DisputesService) {}
 
+  /**
+   * Открывает новый спор
+   * @param data - Данные для открытия спора
+   * @returns {Promise<{id: string, status: DisputeStatus, message: string}>} Результат открытия спора
+   */
   @GrpcMethod('DisputesService', 'OpenDispute')
   async openDispute(data: { dealId: string; userId: string; reason: string }) {
     const result = await this.disputesService.openDispute(
@@ -21,6 +34,11 @@ export class DisputesController {
     };
   }
 
+  /**
+   * Разрешает существующий спор
+   * @param data - Данные для разрешения спора
+   * @returns {Promise<{id: string, status: DisputeStatus, message: string}>} Результат разрешения спора
+   */
   @GrpcMethod('DisputesService', 'ResolveDispute')
   async resolveDispute(data: {
     dealId: string;
@@ -41,6 +59,11 @@ export class DisputesController {
     };
   }
 
+  /**
+   * Получает спор по идентификатору
+   * @param data - Данные для поиска спора
+   * @returns {Promise<{dispute: {id: string, deal_id: string, opened_by: string, opened_by_role: string, reason: string, status: DisputeStatus, resolved_at: string, resolution: string, created_at: string, updated_at: string}}>} Найденный спор
+   */
   @GrpcMethod('DisputesService', 'GetDisputeById')
   async getDisputeById(data: { disputeId: string }) {
     const result = await this.disputesService.getDisputeById(data.disputeId);
@@ -60,6 +83,11 @@ export class DisputesController {
     };
   }
 
+  /**
+   * Получает список споров по идентификатору сделки
+   * @param data - Данные для поиска споров
+   * @returns {Promise<{disputes: Array<{id: string, deal_id: string, opened_by: string, opened_by_role: string, reason: string, status: DisputeStatus, resolved_at: string, resolution: string, created_at: string, updated_at: string}>}>} Список споров
+   */
   @GrpcMethod('DisputesService', 'GetDisputesByDealId')
   async getDisputesByDealId(data: { dealId: string }) {
     const result = await this.disputesService.getDisputesByDealId(data.dealId);

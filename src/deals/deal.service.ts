@@ -13,16 +13,29 @@ enum UserRole {
   MODERATOR = 'MODERATOR'
 }
 
+/**
+ * Сервис для работы со сделками
+ * Предоставляет методы для управления сделками в системе
+ */
 @Injectable()
 export class DealService implements OnModuleInit {
   private readonly DEAL_AUTO_ACCEPT_TIMEOUT = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
 
+  /**
+   * Создает экземпляр DealService
+   * @param prisma - Сервис для работы с базой данных
+   * @param kafka - Сервис для работы с Kafka
+   * @param notification - Сервис для отправки уведомлений
+   */
   constructor(
     private prisma: PrismaService,
     private kafka: KafkaService,
     private notification: NotificationService,
   ) {}
 
+  /**
+   * Инициализирует сервис при запуске модуля
+   */
   async onModuleInit() {
     // Сначала подключаемся к Kafka
     await this.kafka.connect();
@@ -119,6 +132,14 @@ export class DealService implements OnModuleInit {
     });
   }
 
+  /**
+   * Валидирует действие пользователя по сделке
+   * @param deal - Сделка
+   * @param userId - Идентификатор пользователя
+   * @param action - Действие
+   * @returns {{isCustomer: boolean, isVendor: boolean}} Результат валидации
+   * @throws {BadRequestException} Если пользователь не имеет прав на действие
+   */
   private validateDealAction(deal: any, userId: string, action: string) {
     if (!deal) {
       throw new BadRequestException('Deal not found');
@@ -342,6 +363,13 @@ export class DealService implements OnModuleInit {
     });
   }
 
+  /**
+   * Освобождает зарезервированные средства
+   * @param userId - Идентификатор пользователя
+   * @param amount - Сумма
+   * @param tx - Транзакция
+   * @returns {Promise<void>}
+   */
   private async releaseFunds(userId: string, amount: number, prismaTx?: any) {
     const tx = prismaTx || this.prisma;
     
@@ -358,6 +386,12 @@ export class DealService implements OnModuleInit {
     });
   }
 
+  /**
+   * Переводит средства продавцу
+   * @param deal - Сделка
+   * @param tx - Транзакция
+   * @returns {Promise<void>}
+   */
   private async transferFundsToVendor(deal: any, prismaTx?: any) {
     const tx = prismaTx || this.prisma;
     
@@ -382,6 +416,14 @@ export class DealService implements OnModuleInit {
     });
   }
 
+  /**
+   * Открывает спор по сделке
+   * @param dealId - Идентификатор сделки
+   * @param userId - Идентификатор пользователя
+   * @param reason - Причина открытия спора
+   * @returns {Promise<{deal: any, dispute: any}>} Результат открытия спора
+   * @throws {BadRequestException} Если сделка не найдена или уже есть активный спор
+   */
   async openDispute(dealId: string, userId: string, reason: string) {
     return this.prisma.$transaction(async (tx) => {
       const deal = await tx.deal.findUnique({
@@ -438,6 +480,15 @@ export class DealService implements OnModuleInit {
     });
   }
 
+  /**
+   * Разрешает спор по сделке
+   * @param dealId - Идентификатор сделки
+   * @param disputeId - Идентификатор спора
+   * @param resolution - Решение по спору
+   * @param moderatorId - Идентификатор модератора
+   * @returns {Promise<{deal: any, dispute: any}>} Результат разрешения спора
+   * @throws {BadRequestException} Если спор не найден, уже разрешен или пользователь не является модератором
+   */
   async resolveDispute(dealId: string, disputeId: string, resolution: string, moderatorId: string) {
     return this.prisma.$transaction(async (tx) => {
       const deal = await tx.deal.findUnique({
@@ -578,6 +629,11 @@ export class DealService implements OnModuleInit {
     });
   }
 
+  /**
+   * Получает сделку по идентификатору
+   * @param dealId - Идентификатор сделки
+   * @returns {Promise<any>} Найденная сделка
+   */
   async getDealById(dealId: string) {
     return this.prisma.deal.findUnique({
       where: { id: dealId },

@@ -2,6 +2,10 @@ import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/commo
 import { ConfigService } from '@nestjs/config';
 import { Kafka, Producer, Consumer, EachMessagePayload } from 'kafkajs';
 
+/**
+ * Сервис для работы с Kafka
+ * Обеспечивает подключение к Kafka, отправку и получение сообщений
+ */
 @Injectable()
 export class KafkaService implements OnModuleInit, OnModuleDestroy {
   private kafka: Kafka;
@@ -10,6 +14,10 @@ export class KafkaService implements OnModuleInit, OnModuleDestroy {
   private logger = new Logger(KafkaService.name)
   private isConsumerRunning = false;
 
+  /**
+   * Создает экземпляр KafkaService
+   * @param configService - Сервис конфигурации для получения настроек Kafka
+   */
   constructor(
     private readonly configService: ConfigService
   ) {
@@ -22,10 +30,18 @@ export class KafkaService implements OnModuleInit, OnModuleDestroy {
     this.consumer = this.kafka.consumer({ groupId: 'deal-service-group' });
   }
 
+  /**
+   * Инициализирует подключение к Kafka при запуске модуля
+   */
   async onModuleInit() {
     await this.connect();
   }
 
+  /**
+   * Устанавливает соединение с Kafka
+   * Подключает producer и consumer
+   * @throws {Error} Если не удалось подключиться к Kafka
+   */
   async connect() {
     try {
       await this.producer.connect();
@@ -39,6 +55,11 @@ export class KafkaService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  /**
+   * Отправляет событие в Kafka
+   * @param event - Объект события с типом и полезной нагрузкой
+   * @throws {Error} Если не удалось отправить событие
+   */
   async sendDealEvent(event: { type: string; payload: any }) {
     try {
       await this.producer.send({
@@ -56,6 +77,10 @@ export class KafkaService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  /**
+   * Подписывается на обновления сделок в Kafka
+   * @param callback - Функция обратного вызова для обработки полученных сообщений
+   */
   async subscribeToDealUpdates(callback: (message: unknown) => Promise<void>) {
     // Проверяем, не запущен ли уже потребитель
     if (this.isConsumerRunning) {
@@ -86,6 +111,9 @@ export class KafkaService implements OnModuleInit, OnModuleDestroy {
     this.logger.log('Kafka consumer started successfully');
   }
 
+  /**
+   * Отключается от Kafka при завершении работы модуля
+   */
   async onModuleDestroy() {
     try {
       await this.producer.disconnect();

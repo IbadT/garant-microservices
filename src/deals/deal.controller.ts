@@ -1,5 +1,5 @@
 import { Controller, UseFilters, UsePipes, ValidationPipe } from '@nestjs/common';
-import { GrpcMethod } from '@nestjs/microservices';
+import { GrpcMethod, RpcException } from '@nestjs/microservices';
 import { DealService } from './deal.service';
 import { 
   CreateDealRequest, 
@@ -21,16 +21,22 @@ import { CreateDealDto } from './dto/create-deal.dto';
 import { AcceptDealDto } from './dto/accept-deal.dto';
 import { CancelDealDto } from './dto/cancel-deal.dto';
 import { ConfirmCompletionDto } from './dto/confirm-completion.dto';
-import { RpcException } from '@nestjs/microservices';
-import { validate } from 'class-validator';
 import { DeclineDealDto } from './dto/decline-deal.dto';
 import { OpenDisputeDto } from './dto/open-dispute.dto';
 import { ResolveDisputeDto } from './dto/resolve-dispute.dto';
 
+/**
+ * Контроллер для работы со сделками через gRPC
+ * Предоставляет методы для управления сделками в системе
+ */
 @ApiTags('Deals (gRPC)')
 @Controller()
 @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
 export class DealController {
+  /**
+   * Создает экземпляр DealController
+   * @param dealService - Сервис для работы со сделками
+   */
   constructor(private readonly dealService: DealService) {}
 
   @ApiOperation({ summary: 'Create deal', description: 'Creates a new deal initiated by either customer or vendor' })
@@ -193,6 +199,12 @@ export class DealController {
     }
   }
 
+  /**
+   * Открывает спор по сделке
+   * @param data - Данные для открытия спора
+   * @returns {Promise<DealResponse>} Результат открытия спора
+   * @throws {RpcException} Если данные невалидны или произошла внутренняя ошибка
+   */
   @ApiOperation({ summary: 'Open dispute', description: 'Opens a dispute for a deal by either customer or vendor' })
   @GrpcMethod('DealService', 'OpenDealDispute')
   async openDispute(data: OpenDisputeRequest): Promise<DealResponse> {
@@ -225,6 +237,12 @@ export class DealController {
     }
   }
 
+  /**
+   * Разрешает спор по сделке
+   * @param data - Данные для разрешения спора
+   * @returns {Promise<DealResponse>} Результат разрешения спора
+   * @throws {RpcException} Если данные невалидны или произошла внутренняя ошибка
+   */
   @ApiOperation({ summary: 'Resolve dispute', description: 'Resolves a dispute for a deal by a moderator' })
   @GrpcMethod('DealService', 'ResolveDealDispute')
   async resolveDispute(data: ResolveDisputeRequest): Promise<DealResponse> {
@@ -328,10 +346,26 @@ export class DealController {
     }
   }
   
-  // Вспомогательный метод для валидации DTO
+  /**
+   * Валидирует DTO объект
+   * @param dto - Объект для валидации
+   * @returns {Promise<string[]>} Массив ошибок валидации
+   */
   private async validateDto(dto: any): Promise<string[]> {
-    const errors = await validate(dto);
-    return errors.map(error => error.constraints ? Object.values(error.constraints) : []).flat();
+    const errors: string[] = [];
+    const validationPipe = new ValidationPipe({ transform: true, whitelist: true });
+    try {
+      await validationPipe.transform(dto, { type: 'body', metatype: dto.constructor });
+    } catch (error: any) {
+      if (error.response && Array.isArray(error.response.message)) {
+        errors.push(...error.response.message);
+        // errors.push(...(error.response.message as string[]));
+      } else {
+        errors.push(error.message);
+        // errors.push(error.message as string);
+      }
+    }
+    return errors;
   }
 };
 
