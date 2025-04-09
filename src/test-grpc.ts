@@ -2,6 +2,10 @@ import { credentials } from '@grpc/grpc-js';
 import { loadPackageDefinition } from '@grpc/grpc-js';
 import { loadSync } from '@grpc/proto-loader';
 import { join } from 'path';
+import * as dotenv from 'dotenv';
+
+// Load environment variables
+dotenv.config();
 
 const PROTO_PATH = join(__dirname, 'proto/garant.proto');
 
@@ -28,7 +32,7 @@ if (!DealService) {
 }
 
 const client = new DealService(
-  'localhost:50051',
+  process.env.GRPC_URL || 'localhost:50051',
   credentials.createInsecure()
 );
 
