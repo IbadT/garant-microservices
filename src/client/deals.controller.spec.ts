@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { DealsController } from './client.controller';
 import { DealsClient } from './deals.client';
 import { DealStatus, DealInitiator } from '@prisma/client';
+import { KafkaService } from '../kafka/kafka.service';
 
 describe('DealsController', () => {
   let controller: DealsController;
@@ -17,6 +18,12 @@ describe('DealsController', () => {
     getDealById: jest.fn(),
   };
 
+  const mockKafkaService = {
+    connect: jest.fn(),
+    subscribeToDealUpdates: jest.fn(),
+    sendDealEvent: jest.fn(),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [DealsController],
@@ -24,6 +31,10 @@ describe('DealsController', () => {
         {
           provide: DealsClient,
           useValue: mockDealsClient,
+        },
+        {
+          provide: KafkaService,
+          useValue: mockKafkaService,
         },
       ],
     }).compile();
@@ -132,7 +143,7 @@ describe('DealsController', () => {
   });
 
   describe('confirmCompletion', () => {
-    it('should confirm completion of a deal', async () => {
+    it('should confirm completion', async () => {
       const confirmCompletionRequest = {
         dealId: '123e4567-e89b-12d3-a456-426614174002',
         userId: '123e4567-e89b-12d3-a456-426614174001',
@@ -154,7 +165,7 @@ describe('DealsController', () => {
   });
 
   describe('getActiveDeals', () => {
-    it('should get active deals for a user', async () => {
+    it('should get active deals', async () => {
       const getActiveDealsRequest = {
         userId: '123e4567-e89b-12d3-a456-426614174001',
       };
@@ -163,15 +174,18 @@ describe('DealsController', () => {
         deals: [
           {
             id: '123e4567-e89b-12d3-a456-426614174002',
-            status: DealStatus.ACTIVE,
-            customer_id: '123e4567-e89b-12d3-a456-426614174000',
-            vendor_id: '123e4567-e89b-12d3-a456-426614174001',
+            customerId: '123e4567-e89b-12d3-a456-426614174001',
+            vendorId: '123e4567-e89b-12d3-a456-426614174003',
             amount: 1000,
             description: 'Test deal',
+            status: DealStatus.ACTIVE,
             initiator: DealInitiator.CUSTOMER,
-            funds_reserved: true,
-            created_at: new Date(),
-            accepted_at: new Date(),
+            fundsReserved: true,
+            createdAt: new Date().toISOString(),
+            acceptedAt: new Date().toISOString(),
+            completedAt: null,
+            cancelledAt: null,
+            cancelledBy: null,
           },
         ],
       };
@@ -186,7 +200,7 @@ describe('DealsController', () => {
   });
 
   describe('getDealById', () => {
-    it('should get a deal by id', async () => {
+    it('should get deal by id', async () => {
       const getDealByIdRequest = {
         dealId: '123e4567-e89b-12d3-a456-426614174002',
       };
@@ -194,15 +208,18 @@ describe('DealsController', () => {
       const expectedResponse = {
         deal: {
           id: '123e4567-e89b-12d3-a456-426614174002',
-          status: DealStatus.ACTIVE,
-          customer_id: '123e4567-e89b-12d3-a456-426614174000',
-          vendor_id: '123e4567-e89b-12d3-a456-426614174001',
+          customerId: '123e4567-e89b-12d3-a456-426614174001',
+          vendorId: '123e4567-e89b-12d3-a456-426614174003',
           amount: 1000,
           description: 'Test deal',
+          status: DealStatus.ACTIVE,
           initiator: DealInitiator.CUSTOMER,
-          funds_reserved: true,
-          created_at: new Date(),
-          accepted_at: new Date(),
+          fundsReserved: true,
+          createdAt: new Date().toISOString(),
+          acceptedAt: new Date().toISOString(),
+          completedAt: null,
+          cancelledAt: null,
+          cancelledBy: null,
         },
       };
 
@@ -212,6 +229,28 @@ describe('DealsController', () => {
 
       expect(result).toEqual(expectedResponse);
       expect(mockDealsClient.getDealById).toHaveBeenCalledWith(getDealByIdRequest);
+    });
+  });
+
+  describe('testKafka', () => {
+    it('should test kafka connection', async () => {
+      const expectedResponse = {
+        success: true,
+        message: 'Test message sent to Kafka',
+      };
+
+      mockKafkaService.sendDealEvent.mockResolvedValue(undefined);
+
+      const result = await controller.testKafka();
+
+      expect(result).toEqual(expectedResponse);
+      expect(mockKafkaService.sendDealEvent).toHaveBeenCalledWith({
+        type: 'TEST',
+        payload: expect.objectContaining({
+          message: 'This is a test message',
+          timestamp: expect.any(String)
+        })
+      });
     });
   });
 }); 

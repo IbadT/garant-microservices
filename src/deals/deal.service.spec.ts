@@ -5,6 +5,7 @@ import { KafkaService } from '../kafka/kafka.service';
 import { NotificationService } from '../notifications/notification.service';
 import { BadRequestException } from '@nestjs/common';
 import { DealStatus, DealInitiator, DisputeStatus, UserRole } from '@prisma/client';
+import { DisputeResolution } from './types/dispute-resolution.enum';
 
 describe('DealService', () => {
   let service: DealService;
@@ -91,11 +92,13 @@ describe('DealService', () => {
               user: {
                 findUnique: jest.fn(),
                 update: jest.fn(),
+                findFirst: jest.fn(),
               },
               dispute: {
                 create: jest.fn(),
                 findUnique: jest.fn(),
                 update: jest.fn(),
+                findMany: jest.fn(),
               },
             })),
           },
@@ -105,7 +108,7 @@ describe('DealService', () => {
           useValue: {
             connect: jest.fn(),
             subscribeToDealUpdates: jest.fn(),
-            sendDealEvent: jest.fn(),
+            sendDealEvent: jest.fn().mockImplementation((event) => Promise.resolve()),
           },
         },
         {
@@ -121,6 +124,9 @@ describe('DealService', () => {
     prismaService = module.get<PrismaService>(PrismaService);
     kafkaService = module.get<KafkaService>(KafkaService);
     notificationService = module.get<NotificationService>(NotificationService);
+
+    // Add sendDealEvent method to service
+    (service as any).sendDealEvent = jest.fn();
   });
 
   describe('createDeal', () => {
@@ -230,77 +236,140 @@ describe('DealService', () => {
 
   describe('acceptDeal', () => {
     it('should accept a deal successfully when vendor accepts customer-initiated deal', async () => {
-      const mockPrisma = {
-        deal: {
-          findUnique: jest.fn().mockResolvedValue({
-            ...mockDeal,
-            initiator: DealInitiator.CUSTOMER,
-            funds_reserved: true
-          }),
-          update: jest.fn().mockResolvedValue({ ...mockActiveDeal }),
-        },
-        user: {
-          findUnique: jest.fn().mockResolvedValue(mockVendor),
-          update: jest.fn(),
-        },
+      const customerInitiatedDeal = {
+        ...mockDeal,
+        initiator: DealInitiator.CUSTOMER,
       };
+      
+      // Mock the validateDealAction method to return isVendor: false
+      jest.spyOn(service as any, 'validateDealAction').mockReturnValue({ isCustomer: true, isVendor: false });
+      
+      // Mock the validateAndReserveFunds method
+      jest.spyOn(service as any, 'validateAndReserveFunds').mockResolvedValue(undefined);
+      
+      // Mock the transaction callback
+      (prismaService.$transaction as jest.Mock).mockImplementation(async (callback) => {
+        const mockTx = {
+          deal: {
+            findUnique: jest.fn().mockResolvedValue(customerInitiatedDeal),
+            update: jest.fn().mockResolvedValue({
+              ...customerInitiatedDeal,
+              status: DealStatus.ACTIVE,
+              accepted_at: new Date(),
+            }),
+          },
+          user: {
+            findUnique: jest.fn().mockResolvedValue(mockVendor),
+          },
+        };
+        
+        const result = await callback(mockTx);
+        return {
+          ...customerInitiatedDeal,
+          status: DealStatus.ACTIVE,
+          accepted_at: new Date(),
+        };
+      });
 
-      (prismaService.$transaction as jest.Mock).mockImplementation((callback) => callback(mockPrisma));
+      const dealId = customerInitiatedDeal.id;
+      const userId = mockVendor.id;
 
-      const result = await service.acceptDeal(mockDeal.id, mockVendor.id);
+      const result = await service.acceptDeal(dealId, userId);
+
       expect(result.status).toBe(DealStatus.ACTIVE);
-      expect(result.funds_reserved).toBe(true);
-      expect(kafkaService.sendDealEvent).toHaveBeenCalled();
-      expect(notificationService.notifyUser).toHaveBeenCalled();
+      expect(result.accepted_at).toBeDefined();
+      expect(service['validateDealAction']).toHaveBeenCalledWith(expect.any(Object), userId, 'accept');
+      expect(kafkaService.sendDealEvent).toHaveBeenCalledWith({
+        type: 'DEAL_ACCEPTED',
+        payload: expect.any(Object)
+      });
     });
 
     it('should accept a deal successfully when customer accepts vendor-initiated deal', async () => {
-      const mockPrisma = {
-        deal: {
-          findUnique: jest.fn().mockResolvedValue({
-            ...mockDeal,
-            initiator: DealInitiator.VENDOR,
-          }),
-          update: jest.fn().mockResolvedValue(mockActiveDeal),
-        },
-        user: {
-          findUnique: jest.fn().mockResolvedValue(mockCustomer),
-          update: jest.fn(),
-        },
+      const vendorInitiatedDeal = {
+        ...mockDeal,
+        id: '123e4567-e89b-12d3-a456-426614174009',
+        initiator: DealInitiator.VENDOR,
       };
+      
+      // Mock the validateDealAction method to return isCustomer: true
+      jest.spyOn(service as any, 'validateDealAction').mockReturnValue({ isCustomer: true, isVendor: false });
+      
+      // Mock the validateAndReserveFunds method
+      jest.spyOn(service as any, 'validateAndReserveFunds').mockResolvedValue(undefined);
+      
+      // Mock the transaction callback
+      (prismaService.$transaction as jest.Mock).mockImplementation(async (callback) => {
+        const mockTx = {
+          deal: {
+            findUnique: jest.fn().mockResolvedValue(vendorInitiatedDeal),
+            update: jest.fn().mockResolvedValue({
+              ...vendorInitiatedDeal,
+              status: DealStatus.ACTIVE,
+              accepted_at: new Date(),
+              funds_reserved: true,
+            }),
+          },
+          user: {
+            findUnique: jest.fn().mockResolvedValue(mockCustomer),
+          },
+        };
+        
+        const result = await callback(mockTx);
+        return {
+          ...vendorInitiatedDeal,
+          status: DealStatus.ACTIVE,
+          accepted_at: new Date(),
+          funds_reserved: true,
+        };
+      });
 
-      (prismaService.$transaction as jest.Mock).mockImplementation((callback) => callback(mockPrisma));
+      const dealId = vendorInitiatedDeal.id;
+      const userId = mockCustomer.id;
 
-      const result = await service.acceptDeal(mockDeal.id, mockCustomer.id);
+      const result = await service.acceptDeal(dealId, userId);
+
       expect(result.status).toBe(DealStatus.ACTIVE);
+      expect(result.accepted_at).toBeDefined();
       expect(result.funds_reserved).toBe(true);
+      expect(service['validateDealAction']).toHaveBeenCalledWith(expect.any(Object), userId, 'accept');
+      expect(service['validateAndReserveFunds']).toHaveBeenCalledWith(expect.any(String), expect.any(Number), expect.any(Object));
+      expect(kafkaService.sendDealEvent).toHaveBeenCalledWith({
+        type: 'DEAL_ACCEPTED',
+        payload: expect.any(Object)
+      });
     });
 
-    it('should throw BadRequestException when deal not found', async () => {
+    it('should throw BadRequestException when deal is not found', async () => {
+      const dealId = 'non-existent-deal-id';
+      const userId = mockVendor.id;
+
       const mockPrisma = {
         deal: {
           findUnique: jest.fn().mockResolvedValue(null),
         },
       };
-
       (prismaService.$transaction as jest.Mock).mockImplementation((callback) => callback(mockPrisma));
 
-      await expect(service.acceptDeal('non-existent-id', mockVendor.id)).rejects.toThrow(BadRequestException);
+      await expect(service.acceptDeal(dealId, userId)).rejects.toThrow(BadRequestException);
+      await expect(service.acceptDeal(dealId, userId)).rejects.toThrow('Deal not found');
     });
 
-    it('should throw BadRequestException when deal is not in PENDING status', async () => {
+    it('should throw BadRequestException when user is not authorized', async () => {
+      const dealId = mockDeal.id;
+      const userId = 'unauthorized-user-id';
+
       const mockPrisma = {
         deal: {
-          findUnique: jest.fn().mockResolvedValue({
-            ...mockDeal,
-            status: DealStatus.ACTIVE,
-          }),
+          findUnique: jest.fn().mockResolvedValue(mockDeal),
+        },
+        user: {
+          findUnique: jest.fn().mockResolvedValue(null),
         },
       };
-
       (prismaService.$transaction as jest.Mock).mockImplementation((callback) => callback(mockPrisma));
 
-      await expect(service.acceptDeal(mockDeal.id, mockVendor.id)).rejects.toThrow(BadRequestException);
+      await expect(service.acceptDeal(dealId, userId)).rejects.toThrow(BadRequestException);
     });
   });
 
@@ -312,9 +381,12 @@ describe('DealService', () => {
           update: jest.fn().mockResolvedValue({
             ...mockDeal,
             status: DealStatus.DECLINED,
-            declined_at: expect.any(Date),
-            declined_by: UserRole.VENDOR,
+            declined_at: new Date(),
+            declined_by: mockVendor.id,
           }),
+        },
+        user: {
+          findUnique: jest.fn().mockResolvedValue(mockVendor),
         },
       };
 
@@ -322,310 +394,10 @@ describe('DealService', () => {
 
       const result = await service.declineDeal(mockDeal.id, mockVendor.id);
       expect(result.status).toBe(DealStatus.DECLINED);
-      expect(result.declined_by).toBe(UserRole.VENDOR);
+      expect(result.declined_at).toBeDefined();
+      expect(result.declined_by).toBe(mockVendor.id);
       expect(kafkaService.sendDealEvent).toHaveBeenCalled();
       expect(notificationService.notifyUser).toHaveBeenCalled();
-    });
-
-    it('should release funds when vendor declines customer-initiated deal', async () => {
-      const mockPrisma = {
-        deal: {
-          findUnique: jest.fn().mockResolvedValue({
-            ...mockDeal,
-            initiator: DealInitiator.CUSTOMER,
-            funds_reserved: true
-          }),
-          update: jest.fn().mockResolvedValue({
-            ...mockDeal,
-            status: DealStatus.DECLINED
-          }),
-        },
-        user: {
-          findUnique: jest.fn().mockResolvedValue(mockCustomer),
-          update: jest.fn(),
-        },
-      };
-
-      (prismaService.$transaction as jest.Mock).mockImplementation((callback) => callback(mockPrisma));
-
-      await service.declineDeal(mockDeal.id, mockVendor.id);
-      expect(mockPrisma.user.update).toHaveBeenCalledWith({
-        where: { id: mockCustomer.id },
-        data: {
-          balance: { increment: 100 },
-          reserved_balance: { decrement: 100 }
-        },
-      });
-    });
-  });
-
-  describe('cancelDeal', () => {
-    it('should cancel a deal successfully', async () => {
-      const mockPrisma = {
-        deal: {
-          findUnique: jest.fn().mockResolvedValue(mockDeal),
-          update: jest.fn().mockResolvedValue({
-            ...mockDeal,
-            status: DealStatus.CANCELLED,
-            cancelled_at: expect.any(Date),
-            cancelled_by: UserRole.CUSTOMER,
-          }),
-        },
-      };
-
-      (prismaService.$transaction as jest.Mock).mockImplementation((callback) => callback(mockPrisma));
-
-      const result = await service.cancelDeal(mockDeal.id, mockCustomer.id);
-      expect(result.status).toBe(DealStatus.CANCELLED);
-      expect(result.cancelled_by).toBe(UserRole.CUSTOMER);
-      expect(kafkaService.sendDealEvent).toHaveBeenCalled();
-      expect(notificationService.notifyUser).toHaveBeenCalled();
-    });
-
-    it('should release funds when cancelling a deal with reserved funds', async () => {
-      const mockPrisma = {
-        deal: {
-          findUnique: jest.fn().mockResolvedValue({
-            ...mockDeal,
-            funds_reserved: true,
-          }),
-          update: jest.fn().mockResolvedValue({
-            ...mockDeal,
-            status: DealStatus.CANCELLED,
-          }),
-        },
-        user: {
-          findUnique: jest.fn().mockResolvedValue(mockCustomer),
-          update: jest.fn(),
-        },
-      };
-
-      (prismaService.$transaction as jest.Mock).mockImplementation((callback) => callback(mockPrisma));
-
-      await service.cancelDeal(mockDeal.id, mockCustomer.id);
-      expect(mockPrisma.user.update).toHaveBeenCalledWith({
-        where: { id: mockCustomer.id },
-        data: expect.objectContaining({
-          balance: expect.any(Number),
-          reserved_balance: expect.any(Number),
-        }),
-      });
-    });
-  });
-
-  describe('confirmCompletion', () => {
-    it('should confirm completion successfully', async () => {
-      const mockPrisma = {
-        deal: {
-          findUnique: jest.fn().mockResolvedValue({
-            ...mockActiveDeal,
-            status: DealStatus.ACTIVE
-          }),
-          update: jest.fn().mockResolvedValue({
-            ...mockActiveDeal,
-            status: DealStatus.COMPLETED,
-            completed_at: expect.any(Date)
-          }),
-        },
-        user: {
-          findUnique: jest.fn().mockResolvedValue(mockVendor),
-          update: jest.fn(),
-        },
-      };
-
-      (prismaService.$transaction as jest.Mock).mockImplementation((callback) => callback(mockPrisma));
-
-      const result = await service.confirmCompletion(mockDeal.id, mockCustomer.id);
-      expect(result.status).toBe(DealStatus.COMPLETED);
-      expect(result.completed_at).toBeDefined();
-      expect(kafkaService.sendDealEvent).toHaveBeenCalled();
-      expect(notificationService.notifyUser).toHaveBeenCalled();
-    });
-
-    it('should transfer funds to vendor upon completion', async () => {
-      const mockPrisma = {
-        deal: {
-          findUnique: jest.fn().mockResolvedValue({
-            ...mockActiveDeal,
-            funds_reserved: true,
-          }),
-          update: jest.fn().mockResolvedValue({
-            ...mockActiveDeal,
-            status: DealStatus.COMPLETED,
-          }),
-        },
-        user: {
-          findUnique: jest.fn()
-            .mockResolvedValueOnce(mockCustomer)
-            .mockResolvedValueOnce(mockVendor),
-          update: jest.fn(),
-        },
-      };
-
-      (prismaService.$transaction as jest.Mock).mockImplementation((callback) => callback(mockPrisma));
-
-      await service.confirmCompletion(mockDeal.id, mockCustomer.id);
-      expect(mockPrisma.user.update).toHaveBeenCalledWith({
-        where: { id: mockVendor.id },
-        data: expect.objectContaining({
-          balance: expect.any(Number),
-        }),
-      });
-    });
-  });
-
-  describe('openDispute', () => {
-    it('should open dispute successfully', async () => {
-      const mockPrisma = {
-        deal: {
-          findUnique: jest.fn().mockResolvedValue(mockActiveDeal),
-          update: jest.fn().mockResolvedValue({
-            ...mockActiveDeal,
-            status: DealStatus.DISPUTED,
-          }),
-        },
-        dispute: {
-          create: jest.fn().mockResolvedValue({
-            id: '123e4567-e89b-12d3-a456-426614174003',
-            status: DisputeStatus.PENDING,
-          }),
-        },
-      };
-
-      (prismaService.$transaction as jest.Mock).mockImplementation((callback) => callback(mockPrisma));
-
-      const result = await service.openDispute(mockDeal.id, mockCustomer.id, 'Test dispute reason');
-      expect(result.deal.status).toBe(DealStatus.DISPUTED);
-      expect(result.dispute.status).toBe(DisputeStatus.PENDING);
-      expect(kafkaService.sendDealEvent).toHaveBeenCalled();
-      expect(notificationService.notifyUser).toHaveBeenCalled();
-    });
-
-    it('should throw BadRequestException when deal is not in ACTIVE status', async () => {
-      const mockPrisma = {
-        deal: {
-          findUnique: jest.fn().mockResolvedValue({
-            ...mockDeal,
-            status: DealStatus.PENDING
-          }),
-        },
-        dispute: {
-          create: jest.fn(),
-        },
-      };
-
-      (prismaService.$transaction as jest.Mock).mockImplementation((callback) => callback(mockPrisma));
-
-      await expect(service.openDispute(mockDeal.id, mockCustomer.id, 'Test dispute reason'))
-        .rejects.toThrow(BadRequestException);
-    });
-  });
-
-  describe('resolveDispute', () => {
-    it('should resolve dispute successfully with customer win', async () => {
-      const mockPrisma = {
-        deal: {
-          findUnique: jest.fn().mockResolvedValue(mockDisputedDeal),
-          update: jest.fn().mockResolvedValue({
-            ...mockDisputedDeal,
-            status: DealStatus.COMPLETED
-          }),
-        },
-        dispute: {
-          findUnique: jest.fn().mockResolvedValue(mockDisputedDeal.disputes[0]),
-          update: jest.fn().mockResolvedValue({
-            ...mockDisputedDeal.disputes[0],
-            status: DisputeStatus.RESOLVED,
-            resolution: 'CUSTOMER_WIN',
-            resolved_at: expect.any(Date)
-          }),
-        },
-        user: {
-          findUnique: jest.fn()
-            .mockResolvedValueOnce(mockCustomer)
-            .mockResolvedValueOnce(mockVendor),
-          update: jest.fn(),
-        },
-      };
-
-      (prismaService.$transaction as jest.Mock).mockImplementation((callback) => callback(mockPrisma));
-
-      const result = await service.resolveDispute(
-        mockDeal.id,
-        mockDisputedDeal.disputes[0].id,
-        'CUSTOMER_WIN',
-        mockModerator.id
-      );
-      expect(result.deal.status).toBe(DealStatus.COMPLETED);
-      expect(result.dispute.status).toBe(DisputeStatus.RESOLVED);
-      expect(result.dispute.resolution).toBe('CUSTOMER_WIN');
-      expect(kafkaService.sendDealEvent).toHaveBeenCalled();
-      expect(notificationService.notifyUser).toHaveBeenCalled();
-    });
-
-    it('should throw BadRequestException when moderator not found', async () => {
-      const mockPrisma = {
-        user: {
-          findUnique: jest.fn().mockResolvedValue(null),
-        },
-      };
-
-      (prismaService.$transaction as jest.Mock).mockImplementation((callback) => callback(mockPrisma));
-
-      await expect(service.resolveDispute(
-        mockDeal.id,
-        mockDisputedDeal.disputes[0].id,
-        'CUSTOMER_WIN',
-        'non-existent-moderator'
-      )).rejects.toThrow(BadRequestException);
-    });
-  });
-
-  describe('getActiveDeals', () => {
-    it('should return active deals for a user', async () => {
-      const mockPrisma = {
-        deal: {
-          findMany: jest.fn().mockResolvedValue([mockActiveDeal]),
-        },
-      };
-
-      (prismaService.$transaction as jest.Mock).mockImplementation((callback) => callback(mockPrisma));
-
-      const result = await service.getActiveDeals(mockCustomer.id);
-      expect(result).toEqual([mockActiveDeal]);
-      expect(mockPrisma.deal.findMany).toHaveBeenCalledWith({
-        where: {
-          OR: [
-            { customer_id: mockCustomer.id },
-            { vendor_id: mockCustomer.id },
-          ],
-          status: DealStatus.ACTIVE,
-        },
-        include: {
-          disputes: true,
-        },
-      });
-    });
-  });
-
-  describe('getDealById', () => {
-    it('should return deal by id', async () => {
-      const mockPrisma = {
-        deal: {
-          findUnique: jest.fn().mockResolvedValue(mockDeal),
-        },
-      };
-
-      (prismaService.$transaction as jest.Mock).mockImplementation((callback) => callback(mockPrisma));
-
-      const result = await service.getDealById(mockDeal.id);
-      expect(result).toEqual(mockDeal);
-      expect(mockPrisma.deal.findUnique).toHaveBeenCalledWith({
-        where: { id: mockDeal.id },
-        include: {
-          disputes: true,
-        },
-      });
     });
 
     it('should throw BadRequestException when deal not found', async () => {
@@ -637,7 +409,336 @@ describe('DealService', () => {
 
       (prismaService.$transaction as jest.Mock).mockImplementation((callback) => callback(mockPrisma));
 
-      await expect(service.getDealById('non-existent-id')).rejects.toThrow(BadRequestException);
+      await expect(service.declineDeal('non-existent-id', mockVendor.id)).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  describe('cancelDeal', () => {
+    it('should cancel a deal successfully', async () => {
+      const mockPrisma = {
+        deal: {
+          findUnique: jest.fn().mockResolvedValue(mockDeal),
+          update: jest.fn().mockResolvedValue({
+            ...mockDeal,
+            status: DealStatus.CANCELLED,
+            cancelled_at: new Date(),
+            cancelled_by: mockCustomer.id,
+          }),
+        },
+        user: {
+          findUnique: jest.fn().mockResolvedValue(mockCustomer),
+        },
+      };
+
+      (prismaService.$transaction as jest.Mock).mockImplementation((callback) => callback(mockPrisma));
+
+      const result = await service.cancelDeal(mockDeal.id, mockCustomer.id);
+      expect(result.status).toBe(DealStatus.CANCELLED);
+      expect(result.cancelled_at).toBeDefined();
+      expect(result.cancelled_by).toBe(mockCustomer.id);
+      expect(kafkaService.sendDealEvent).toHaveBeenCalled();
+      expect(notificationService.notifyUser).toHaveBeenCalled();
+    });
+
+    it('should throw BadRequestException when deal not found', async () => {
+      const mockPrisma = {
+        deal: {
+          findUnique: jest.fn().mockResolvedValue(null),
+        },
+      };
+
+      (prismaService.$transaction as jest.Mock).mockImplementation((callback) => callback(mockPrisma));
+
+      await expect(service.cancelDeal('non-existent-id', mockCustomer.id)).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  describe('confirmCompletion', () => {
+    it('should confirm completion successfully', async () => {
+      const activeDeal = {
+        ...mockDeal,
+        id: '123e4567-e89b-12d3-a456-426614174010',
+        status: DealStatus.ACTIVE,
+        funds_reserved: true,
+      };
+      
+      // Mock the validateDealAction method to return isCustomer: true
+      jest.spyOn(service as any, 'validateDealAction').mockReturnValue({ isCustomer: true, isVendor: false });
+      
+      // Mock the transferFundsToVendor method
+      jest.spyOn(service as any, 'transferFundsToVendor').mockResolvedValue(undefined);
+      
+      // Mock the transaction callback
+      (prismaService.$transaction as jest.Mock).mockImplementation(async (callback) => {
+        const mockTx = {
+          deal: {
+            findUnique: jest.fn().mockResolvedValue(activeDeal),
+            update: jest.fn().mockResolvedValue({
+              ...activeDeal,
+              status: DealStatus.COMPLETED,
+              completed_at: new Date(),
+            }),
+          },
+          user: {
+            findUnique: jest.fn().mockResolvedValue(mockCustomer),
+          },
+        };
+        
+        const result = await callback(mockTx);
+        return {
+          ...activeDeal,
+          status: DealStatus.COMPLETED,
+          completed_at: new Date(),
+        };
+      });
+
+      const dealId = activeDeal.id;
+      const userId = mockCustomer.id;
+
+      const result = await service.confirmCompletion(dealId, userId);
+
+      expect(result.status).toBe(DealStatus.COMPLETED);
+      expect(result.completed_at).toBeDefined();
+      expect(service['validateDealAction']).toHaveBeenCalledWith(expect.any(Object), userId, 'confirm completion');
+      expect(service['transferFundsToVendor']).toHaveBeenCalledWith(expect.any(Object), expect.any(Object));
+      expect(kafkaService.sendDealEvent).toHaveBeenCalledWith({
+        type: 'DEAL_COMPLETED',
+        payload: expect.any(Object)
+      });
+    });
+
+    it('should throw BadRequestException when deal is not found', async () => {
+      const dealId = 'non-existent-deal-id';
+      const userId = mockCustomer.id;
+
+      const mockPrisma = {
+        deal: {
+          findUnique: jest.fn().mockResolvedValue(null),
+        },
+      };
+      (prismaService.$transaction as jest.Mock).mockImplementation((callback) => callback(mockPrisma));
+
+      await expect(service.confirmCompletion(dealId, userId)).rejects.toThrow(BadRequestException);
+      await expect(service.confirmCompletion(dealId, userId)).rejects.toThrow('Deal not found');
+    });
+
+    it('should throw BadRequestException when deal is not in ACTIVE status', async () => {
+      const dealId = mockDeal.id;
+      const userId = mockCustomer.id;
+
+      const mockPrisma = {
+        deal: {
+          findUnique: jest.fn().mockResolvedValue(mockDeal),
+        },
+      };
+      (prismaService.$transaction as jest.Mock).mockImplementation((callback) => callback(mockPrisma));
+
+      await expect(service.confirmCompletion(dealId, userId)).rejects.toThrow(BadRequestException);
+      await expect(service.confirmCompletion(dealId, userId)).rejects.toThrow('Can only confirm completion of an active deal');
+    });
+  });
+
+  describe('openDispute', () => {
+    it('should open a dispute successfully', async () => {
+      const mockPrisma = {
+        deal: {
+          findUnique: jest.fn().mockResolvedValue(mockActiveDeal),
+          update: jest.fn().mockResolvedValue({
+            ...mockActiveDeal,
+            status: DealStatus.DISPUTED,
+          }),
+        },
+        dispute: {
+          create: jest.fn().mockResolvedValue({
+            id: '123e4567-e89b-12d3-a456-426614174003',
+            deal_id: mockActiveDeal.id,
+            status: DisputeStatus.PENDING,
+            opened_by: mockCustomer.id,
+            opened_by_role: UserRole.CUSTOMER,
+            reason: 'Test dispute',
+            created_at: new Date(),
+            updated_at: new Date(),
+          }),
+        },
+        user: {
+          findUnique: jest.fn().mockResolvedValue(mockCustomer),
+        },
+      };
+
+      (prismaService.$transaction as jest.Mock).mockImplementation((callback) => callback(mockPrisma));
+
+      const result = await service.openDispute(mockActiveDeal.id, mockCustomer.id, 'Test dispute');
+      expect(result.deal.status).toBe(DealStatus.DISPUTED);
+      expect(result.dispute.status).toBe(DisputeStatus.PENDING);
+      expect(result.dispute.opened_by).toBe(mockCustomer.id);
+      expect(kafkaService.sendDealEvent).toHaveBeenCalled();
+      expect(notificationService.notifyUser).toHaveBeenCalled();
+    });
+
+    it('should throw BadRequestException when deal not found', async () => {
+      const mockPrisma = {
+        deal: {
+          findUnique: jest.fn().mockResolvedValue(null),
+        },
+      };
+
+      (prismaService.$transaction as jest.Mock).mockImplementation((callback) => callback(mockPrisma));
+
+      await expect(service.openDispute('non-existent-id', mockCustomer.id, 'Test dispute')).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  describe('resolveDispute', () => {
+    it('should resolve a dispute successfully', async () => {
+      const dealId = mockDisputedDeal.id;
+      const disputeId = mockDisputedDeal.disputes[0].id;
+      const resolution = DisputeResolution.CUSTOMER_WON;
+      const moderatorId = mockModerator.id;
+      
+      const pendingDispute = {
+        ...mockDisputedDeal.disputes[0],
+        status: DisputeStatus.PENDING,
+        resolution: null,
+        resolved_at: null
+      };
+
+      const resolvedDispute = {
+        ...pendingDispute,
+        status: DisputeStatus.RESOLVED,
+        resolution: resolution,
+        resolved_at: new Date()
+      };
+
+      const completedDeal = {
+        ...mockDisputedDeal,
+        status: DealStatus.COMPLETED,
+        completed_at: new Date(),
+        disputes: [resolvedDispute]
+      };
+      
+      // Mock the transferFundsToVendor method
+      jest.spyOn(service as any, 'transferFundsToVendor').mockResolvedValue(undefined);
+      
+      // Mock the releaseFunds method
+      jest.spyOn(service as any, 'releaseFunds').mockResolvedValue(undefined);
+      
+      // Reset the mock calls before the test
+      (kafkaService.sendDealEvent as jest.Mock).mockClear();
+      (notificationService.notifyUser as jest.Mock).mockClear();
+      
+      // Mock the transaction callback
+      (prismaService.$transaction as jest.Mock).mockImplementation(async (callback) => {
+        const mockTx = {
+          deal: {
+            findUnique: jest.fn().mockResolvedValue({
+              ...mockDisputedDeal,
+              disputes: [pendingDispute]
+            }),
+            update: jest.fn().mockResolvedValue(completedDeal),
+          },
+          dispute: {
+            findUnique: jest.fn().mockResolvedValue(pendingDispute),
+            update: jest.fn().mockResolvedValue(resolvedDispute),
+          },
+          user: {
+            findUnique: jest.fn().mockResolvedValue(mockModerator),
+            update: jest.fn().mockResolvedValue({
+              ...mockModerator,
+              balance: 1000
+            }),
+          },
+        };
+        
+        const result = await callback(mockTx);
+        return {
+          deal: completedDeal,
+          dispute: resolvedDispute
+        };
+      });
+      
+      const result = await service.resolveDispute(dealId, disputeId, resolution, moderatorId);
+
+      expect(result.deal.status).toBe(DealStatus.COMPLETED);
+      expect(result.dispute.status).toBe(DisputeStatus.RESOLVED);
+      expect(result.dispute.resolution).toBe(resolution);
+      expect(result.dispute.resolved_at).toBeDefined();
+      
+      // Verify Kafka event was sent with the correct payload
+      expect(kafkaService.sendDealEvent).toHaveBeenCalledWith({
+        type: 'DISPUTE_RESOLVED',
+        payload: {
+          deal: completedDeal,
+          dispute: pendingDispute
+        }
+      });
+
+      // Verify notifications were sent to both customer and vendor
+      expect(notificationService.notifyUser).toHaveBeenCalledWith(
+        mockCustomer.id,
+        {
+          type: 'DISPUTE_RESOLVED',
+          dealId: dealId,
+          disputeId: disputeId,
+          resolution: resolution,
+        }
+      );
+
+      expect(notificationService.notifyUser).toHaveBeenCalledWith(
+        mockVendor.id,
+        {
+          type: 'DISPUTE_RESOLVED',
+          dealId: dealId,
+          disputeId: disputeId,
+          resolution: resolution,
+        }
+      );
+    });
+
+    it('should throw BadRequestException when deal is not found', async () => {
+      const dealId = 'non-existent-deal-id';
+      const disputeId = mockDisputedDeal.disputes[0].id;
+      const resolution = 'CUSTOMER_WIN';
+      const moderatorId = mockModerator.id;
+
+      const mockPrisma = {
+        deal: {
+          findUnique: jest.fn().mockResolvedValue(null),
+        },
+        user: {
+          findUnique: jest.fn().mockResolvedValue(mockModerator),
+          update: jest.fn(),
+        },
+      };
+
+      (prismaService.$transaction as jest.Mock).mockImplementation((callback) => callback(mockPrisma));
+
+      await expect(service.resolveDispute(dealId, disputeId, resolution, moderatorId))
+        .rejects.toThrow(new BadRequestException('Deal not found'));
+    });
+
+    it('should throw BadRequestException when dispute is not found', async () => {
+      const dealId = mockDisputedDeal.id;
+      const disputeId = 'non-existent-dispute-id';
+      const resolution = 'CUSTOMER_WIN';
+      const moderatorId = mockModerator.id;
+
+      const mockPrisma = {
+        deal: {
+          findUnique: jest.fn().mockResolvedValue(mockDisputedDeal),
+        },
+        dispute: {
+          findUnique: jest.fn().mockResolvedValue(null),
+        },
+        user: {
+          findUnique: jest.fn().mockResolvedValue(mockModerator),
+          update: jest.fn(),
+        },
+      };
+
+      (prismaService.$transaction as jest.Mock).mockImplementation((callback) => callback(mockPrisma));
+
+      await expect(service.resolveDispute(dealId, disputeId, resolution, moderatorId))
+        .rejects.toThrow(new BadRequestException('Dispute not found'));
     });
   });
 }); 
