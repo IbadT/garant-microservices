@@ -1,12 +1,21 @@
-# Создается неправильные дирректории для dist/proto
-проверить с базой данных
-
-
-
 # garant-microservices
 "build": "nest build",
 
 # Garant Microservices
+
+```
+
+## make all
+## make run
+
+### OR
+
+## make install
+## make build
+## make run
+
+```
+
 
 This project is a microservices-based application built with NestJS, gRPC, and Docker.
 
@@ -37,120 +46,184 @@ Before you begin, ensure you have the following installed:
 
 ## Getting Started
 
-### Development Setup
+### Environment Setup
 
-1. Clone the repository:
+1. Copy the example environment file:
 ```bash
-git clone <repository-url>
-cd garant-microservices
+cp .env.example .env
 ```
 
-2. Install dependencies and setup the development environment:
+2. Update the `.env` file with your configuration:
+```env
+# Application
+PORT=4201
+NODE_ENV=develop
+
+# Database
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/garant?schema=public"
+
+# Kafka
+KAFKA_BROKER=localhost:29092
+
+# gRPC
+GRPC_URL=localhost:50051
+FRONTEND_URL=http://localhost:3000
+
+# Services
+DEALS_SERVICE_URL=localhost:50051
+DISPUTES_SERVICE_URL=localhost:50051
+
+# Monitoring
+SENTRY_DSN=your-sentry-dsn
+
+# Other
+KAFKAJS_NO_PARTITIONER_WARNING=1
+```
+
+### Quick Start
+
+1. Setup the development environment:
 ```bash
 make dev-setup
 ```
+This command will:
+- Install dependencies
+- Generate proto files
+- Build the application
 
-3. Start the PostgreSQL database:
+2. Start the application:
+```bash
+make run
+```
+This command will:
+- Start the PostgreSQL database
+- Start Kafka and Zookeeper
+- Wait for services to be ready
+- Run database migrations
+- Start the application in development mode
+- Watch for proto file changes
+
+The application will be available at:
+- HTTP API: http://localhost:4201 (or PORT from .env)
+- gRPC: localhost:50051 (or GRPC_URL from .env)
+
+### Manual Setup (Alternative)
+
+If you prefer to start services manually:
+
+1. Start the database:
 ```bash
 make db-up
 ```
 
-4. Start Kafka and Zookeeper:
+2. Start Kafka:
 ```bash
 make kafka-up
 ```
 
-5. Start the application in development mode:
+3. Run database migrations:
 ```bash
-make run
+make db-migrate
 ```
 
-The application will be available at:
-- HTTP API: http://localhost:4200
-- gRPC: localhost:50051
-
-### Testing gRPC Client
-
-To test the gRPC communication:
-
-1. Make sure the main application is running:
+4. Start the application:
 ```bash
-make run
+npm run start:dev
 ```
 
-2. In a new terminal, run the gRPC test client:
+### Testing
+
+1. Run the test suite:
+```bash
+make test
+```
+
+2. Run tests with coverage:
+```bash
+make test-cov
+```
+
+3. Test gRPC communication:
 ```bash
 make test-grpc
 ```
 
-The test client will send a request to the gRPC server and display the response.
+### Development Commands
 
-### Docker Setup
-
-1. Build the Docker containers:
+- Format code:
 ```bash
-make docker-build
+make format
 ```
 
-2. Start the containers:
+- Run linter:
 ```bash
-make docker-up
+make lint
 ```
 
-3. View the logs:
-```bash
-make docker-logs
-```
-
-4. Stop the containers:
-```bash
-make docker-down
-```
-
-### Proto File Generation
-
-The project uses Protocol Buffers for gRPC communication. To generate the proto files:
-
+- Generate proto files:
 ```bash
 make proto-gen
 ```
 
-For development with auto-generation on changes:
+- Watch proto files for changes:
 ```bash
 make proto-watch
 ```
 
 ### Database Management
 
-1. Start the PostgreSQL database:
+- Create a new migration:
 ```bash
-make db-up
+make db-migrate-create
 ```
 
-2. Stop the PostgreSQL database:
-```bash
-make db-down
-```
-
-3. Generate Prisma client:
-```bash
-make db-generate
-```
-
-4. Run database migrations:
+- Apply migrations:
 ```bash
 make db-migrate
 ```
 
-### Kafka Management
-
-1. Start Kafka and Zookeeper:
+- Generate Prisma client:
 ```bash
-make kafka-up
+make db-generate
 ```
 
-2. Stop Kafka and Zookeeper:
+- Seed the database:
 ```bash
+make db-seed
+```
+
+### Docker Commands
+
+- Build containers:
+```bash
+make docker-build
+```
+
+- Start containers:
+```bash
+make docker-up
+```
+
+- Stop containers:
+```bash
+make docker-down
+```
+
+- View logs:
+```bash
+make docker-logs
+```
+
+### Cleanup
+
+- Clean build artifacts:
+```bash
+make clean
+```
+
+- Stop all services:
+```bash
+make db-down
 make kafka-down
 ```
 
