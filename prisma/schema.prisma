@@ -10,7 +10,7 @@ datasource db {
 model User {
   id               String    @id @default(uuid())
   email            String    @unique
-  password_hash    String
+  password         String
   role             UserRole
   balance          Float     @default(0)
   reserved_balance Float     @default(0)
@@ -35,6 +35,8 @@ model Deal {
   status         DealStatus
   initiator      DealInitiator
   funds_reserved Boolean     @default(false)
+  commission_amount Float    @default(0)
+  commission_paid Boolean    @default(false)
   created_at     DateTime    @default(now())
   accepted_at    DateTime?
   completed_at   DateTime?
@@ -86,6 +88,26 @@ model Review {
   // Валидация рейтинга (добавляется через @map в миграции)
   @@map("reviews")
   @@index([deal_id])
+}
+
+model CommissionSettings {
+  id            String   @id @default(uuid())
+  percentage    Float    // Процент комиссии
+  min_amount    Float    // Минимальная сумма комиссии
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+  is_active     Boolean  @default(true)
+
+  @@map("commission_settings")
+}
+
+model CommissionBalance {
+  id            String   @id @default(uuid())
+  amount        Float    @default(0)
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+
+  @@map("commission_balance")
 }
 
 // Enums

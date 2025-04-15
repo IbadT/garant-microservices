@@ -95,7 +95,7 @@ async function bootstrap() {
 
 
   await app.startAllMicroservices();
-  await app.listen(PORT);
+  await app.listen(PORT ?? 3000);
 
   logger.log(`Application is running on: ${await app.getUrl()}`);
   logger.log(`Environment: ${NODE_ENV}`);

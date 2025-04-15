@@ -5,6 +5,7 @@ import { NotificationService } from 'src/notifications/notification.service';
 // import { CreateDealRequest } from '../proto/generated/src/proto/garant.pb';
 import { CreateDealRequest } from '../proto/generated/garant.pb';
 import { DealStatus, DealInitiator, DisputeStatus } from '@prisma/client';
+import { CommissionService } from '../commission/commission.service';
 
 // Define UserRole enum since it's not exported from Prisma
 enum UserRole {
@@ -21,17 +22,20 @@ enum UserRole {
 @Injectable()
 export class DealService implements OnModuleInit {
   private readonly DEAL_AUTO_ACCEPT_TIMEOUT = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+  private readonly DEAL_AUTO_CANCEL_TIMEOUT = 30 * 60 * 1000; // 30 minutes in milliseconds
 
   /**
    * Создает экземпляр DealService
    * @param prisma - Сервис для работы с базой данных
    * @param kafka - Сервис для работы с Kafka
    * @param notification - Сервис для отправки уведомлений
+   * @param commissionService - Сервис для работы с комиссиями
    */
   constructor(
     private prisma: PrismaService,
     private kafka: KafkaService,
     private notification: NotificationService,
+    private commissionService: CommissionService,
   ) {}
 
   /**
@@ -44,6 +48,7 @@ export class DealService implements OnModuleInit {
     await this.kafka.subscribeToDealUpdates(this.handleDealUpdate.bind(this));
     // Start checking for auto-accept deals
     this.startAutoAcceptCheck();
+    this.startAutoCancelCheck();
   }
 
   private async handleDealUpdate(message: any) {
@@ -73,25 +78,79 @@ export class DealService implements OnModuleInit {
     }, 5 * 60 * 1000); // Check every 5 minutes
   }
 
+  private async startAutoCancelCheck() {
+    setInterval(async () => {
+      try {
+        const pendingDeals = await this.prisma.deal.findMany({
+          where: {
+            status: DealStatus.PENDING,
+            created_at: {
+              lt: new Date(Date.now() - this.DEAL_AUTO_CANCEL_TIMEOUT)
+            }
+          }
+        });
+
+        for (const deal of pendingDeals) {
+          await this.cancelDeal(deal.id, 'SYSTEM');
+        }
+      } catch (error) {
+        console.error('Error in auto-cancel check:', error);
+      }
+    }, 5 * 60 * 1000); // Check every 5 minutes
+  }
+
   async createDeal(data: CreateDealRequest) {
     return this.prisma.$transaction(async (tx) => {
-      // Проверка баланса инициатора
-      // Проверка баланса и резервирование средств
       if (data.isCustomerInitiator) {
-        await this.validateAndReserveFunds(data.initiatorId, data.amount, tx);
+        const commission = await this.commissionService.calculateCommission(data.amount);
+        const totalAmount = data.amount + commission;
+        
+        // Проверка баланса и резервирование средств включая комиссию
+        await this.validateAndReserveFunds(data.initiatorId, totalAmount, tx);
+        
+        const deal = await tx.deal.create({
+          data: {
+            customer_id: data.initiatorId,
+            vendor_id: data.targetId,
+            amount: data.amount,
+            description: data.description,
+            status: DealStatus.PENDING,
+            initiator: DealInitiator.CUSTOMER,
+            funds_reserved: true,
+            commission_amount: commission,
+            commission_paid: true,
+            created_at: new Date(),
+          }
+        });
+
+        // Добавляем комиссию на баланс системы
+        await this.commissionService.addToCommissionBalance(commission);
+
+        await this.kafka.sendDealEvent({
+          type: 'DEAL_CREATED',
+          payload: deal,
+        });
+
+        await this.notification.notifyUser(data.targetId, {
+          type: 'NEW_DEAL',
+          dealId: deal.id,
+        });
+
+        return deal;
       }
 
+      // Если инициатор - продавец
       const deal = await tx.deal.create({
         data: {
-          customer_id: data.isCustomerInitiator ? data.initiatorId : data.targetId,
-          vendor_id: data.isCustomerInitiator ? data.targetId : data.initiatorId,
+          customer_id: data.targetId,
+          vendor_id: data.initiatorId,
           amount: data.amount,
           description: data.description,
           status: DealStatus.PENDING,
-          initiator: data.isCustomerInitiator ? DealInitiator.CUSTOMER : DealInitiator.VENDOR,
-          funds_reserved: data.isCustomerInitiator,
+          initiator: DealInitiator.VENDOR,
+          funds_reserved: false,
           created_at: new Date(),
-        },
+        }
       });
 
       await this.kafka.sendDealEvent({
@@ -177,18 +236,25 @@ export class DealService implements OnModuleInit {
       }
 
       if (deal.initiator === DealInitiator.VENDOR && isCustomer) {
-        // Если инициатор - продавец, а принимает - покупатель, то резервируем средства
-        await this.validateAndReserveFunds(deal.customer_id, deal.amount, tx);
+        const commission = await this.commissionService.calculateCommission(deal.amount);
+        const totalAmount = deal.amount + commission;
         
-        // Обновляем статус сделки
+        // Резервируем средства покупателя включая комиссию
+        await this.validateAndReserveFunds(deal.customer_id, totalAmount, tx);
+        
         const updatedDeal = await tx.deal.update({
           where: { id: dealId },
           data: {
             status: DealStatus.ACTIVE,
             accepted_at: new Date(),
             funds_reserved: true,
-          },
+            commission_amount: commission,
+            commission_paid: true
+          }
         });
+
+        // Добавляем комиссию на баланс системы
+        await this.commissionService.addToCommissionBalance(commission);
 
         await this.kafka.sendDealEvent({
           type: 'DEAL_ACCEPTED',
@@ -209,7 +275,7 @@ export class DealService implements OnModuleInit {
         data: {
           status: DealStatus.ACTIVE,
           accepted_at: new Date(),
-        },
+        }
       });
 
       await this.kafka.sendDealEvent({
@@ -241,6 +307,11 @@ export class DealService implements OnModuleInit {
       // Определяем, кто отклоняет сделку
       const declinedBy = isCustomer ? 'CUSTOMER' : 'VENDOR';
 
+      // Если комиссия была уплачена, возвращаем её
+      if (deal.commission_paid) {
+        await this.commissionService.refundCommission(dealId);
+      }
+
       // Если инициатор - покупатель, а отклоняет - продавец, то возвращаем средства
       if (deal.initiator === DealInitiator.CUSTOMER && isVendor && deal.funds_reserved) {
         await this.releaseFunds(deal.customer_id, deal.amount, tx);
@@ -252,7 +323,7 @@ export class DealService implements OnModuleInit {
           status: DealStatus.DECLINED,
           declined_at: new Date(),
           declined_by: declinedBy,
-        },
+        }
       });
 
       await this.kafka.sendDealEvent({
@@ -287,6 +358,11 @@ export class DealService implements OnModuleInit {
       // Определяем, кто отменяет сделку
       const cancelledBy = isCustomer ? 'CUSTOMER' : 'VENDOR';
 
+      // Если комиссия была уплачена, возвращаем её
+      if (deal.commission_paid) {
+        await this.commissionService.refundCommission(dealId);
+      }
+
       // Если средства были зарезервированы, возвращаем их
       if (deal.funds_reserved) {
         await this.releaseFunds(deal.customer_id, deal.amount, tx);
@@ -298,7 +374,7 @@ export class DealService implements OnModuleInit {
           status: DealStatus.CANCELLED,
           cancelled_at: new Date(),
           cancelled_by: cancelledBy,
-        },
+        }
       });
 
       await this.kafka.sendDealEvent({

@@ -1,88 +1,107 @@
 import { DealInitiator, DealStatus, DisputeStatus, PrismaClient, UserRole } from '@prisma/client';
 import * as seedData from '../seed-data.json';
+import * as bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
 
 async function main() {
   console.log('Start seeding...');
 
-  // Seed users
-  for (const user of seedData.users) {
-    const createdUser = await prisma.user.upsert({
-      where: { id: user.id },
-      update: {},
-      create: {
-        id: user.id,
-        email: user.email,
-        password_hash: user.password_hash,
-        role: user.role as UserRole,
-        balance: user.balance,
-        reserved_balance: user.reserved_balance,
-        created_at: new Date(user.created_at),
-        updated_at: new Date(user.updated_at)
-      },
-    });
-    console.log(`Created user with id: ${createdUser.id}`);
-  }
+  // Очистка базы данных
+  await prisma.$transaction([
+    prisma.review.deleteMany(),
+    prisma.dispute.deleteMany(),
+    prisma.deal.deleteMany(),
+    prisma.user.deleteMany(),
+    prisma.commissionBalance.deleteMany(),
+    prisma.commissionSettings.deleteMany(),
+  ]);
 
-  // Seed deals
-  for (const deal of seedData.deals) {
-    const createdDeal = await prisma.deal.upsert({
-      where: { id: deal.id },
-      update: {},
-      create: {
-        id: deal.id,
-        customer_id: deal.customer_id,
-        vendor_id: deal.vendor_id,
-        amount: deal.amount,
-        description: deal.description,
-        status: deal.status as DealStatus,
-        initiator: deal.initiator as DealInitiator,
-        funds_reserved: deal.funds_reserved,
-        created_at: new Date(deal.created_at),
-        accepted_at: deal.accepted_at ? new Date(deal.accepted_at) : null,
-        completed_at: deal.completed_at ? new Date(deal.completed_at) : null,
-        cancelled_at: deal.cancelled_at ? new Date(deal.cancelled_at) : null,
-        cancelled_by: deal.cancelled_by,
-        declined_at: deal.declined_at ? new Date(deal.declined_at) : null,
-        declined_by: deal.declined_by
-      },
-    });
-    console.log(`Created deal with id: ${createdDeal.id}`);
-  }
+  // Создание пользователей
+  const customer = await prisma.user.create({
+    data: {
+      email: 'customer@example.com',
+      password: await bcrypt.hash('password123', 10),
+      role: UserRole.CUSTOMER,
+      balance: 10000,
+      reserved_balance: 0,
+    },
+  });
 
-  // Seed disputes
-  for (const dispute of seedData.disputes) {
-    const createdDispute = await prisma.dispute.upsert({
-      where: { id: dispute.id },
-      update: {},
-      create: {
-        id: dispute.id,
-        deal_id: dispute.deal_id,
-        opened_by: dispute.opened_by,
-        opened_by_role: dispute.opened_by_role as UserRole,
-        reason: dispute.reason,
-        status: dispute.status as DisputeStatus,
-        resolved_at: dispute.resolved_at ? new Date(dispute.resolved_at) : null,
-        resolution: dispute.resolution,
-        created_at: new Date(dispute.created_at),
-        updated_at: new Date(dispute.updated_at)
-      },
-    });
-    console.log(`Created dispute with id: ${createdDispute.id}`);
-  }
+  const vendor = await prisma.user.create({
+    data: {
+      email: 'vendor@example.com',
+      password: await bcrypt.hash('password123', 10),
+      role: UserRole.VENDOR,
+      balance: 5000,
+      reserved_balance: 0,
+    },
+  });
 
-  // Seed reviews
-  for (const review of seedData.reviews) {
-    const createdReview = await prisma.review.upsert({
-      where: { id: review.id },
-      update: {},
-      create: review,
-    });
-    console.log(`Created review with id: ${createdReview.id}`);
-  }
+  const admin = await prisma.user.create({
+    data: {
+      email: 'admin@example.com',
+      password: await bcrypt.hash('password123', 10),
+      role: UserRole.ADMIN,
+      balance: 0,
+      reserved_balance: 0,
+    },
+  });
 
-  console.log('Seeding finished.');
+  // Создание настроек комиссий
+  const commissionSettings = await prisma.commissionSettings.create({
+    data: {
+      percentage: 5.0, // 5% комиссия
+      min_amount: 100, // Минимальная комиссия 100 рублей
+      is_active: true,
+    },
+  });
+
+  // Создание начального баланса комиссий
+  const commissionBalance = await prisma.commissionBalance.create({
+    data: {
+      amount: 0, // Начальный баланс комиссий
+    },
+  });
+
+  // Создание сделки
+  const deal = await prisma.deal.create({
+    data: {
+      customer_id: customer.id,
+      vendor_id: vendor.id,
+      amount: 1000,
+      description: 'Тестовая сделка',
+      status: DealStatus.PENDING,
+      initiator: DealInitiator.CUSTOMER,
+      funds_reserved: false,
+      commission_amount: 100, // 5% от 1000 = 50, но минимальная комиссия 100
+      commission_paid: false,
+    },
+  });
+
+  // Создание спора
+  const dispute = await prisma.dispute.create({
+    data: {
+      deal_id: deal.id,
+      opened_by: customer.id,
+      opened_by_role: UserRole.CUSTOMER,
+      reason: 'Не выполнена работа',
+      status: DisputeStatus.PENDING,
+    },
+  });
+
+  // Создание отзыва
+  const review = await prisma.review.create({
+    data: {
+      deal_id: deal.id,
+      author_id: customer.id,
+      target_id: vendor.id,
+      rating: 3,
+      comment: 'Нормальная работа',
+    },
+  });
+
+  console.log('Seed data created successfully');
 }
 
 main()

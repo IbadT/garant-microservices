@@ -434,4 +434,136 @@ export const ApiGetDisputesByDealId = () => {
     ApiResponse({ status: 404, description: 'Deal not found' }),
     ApiResponse({ status: 500, description: 'Internal server error' }),
   );
+};
+
+// Декораторы для Commission Settings
+export const ApiGetCommissionSettings = () => {
+  return applyDecorators(
+    ApiOperation({ summary: 'Get current commission settings' }),
+    ApiResponse({
+      status: 200,
+      description: 'Commission settings retrieved successfully',
+      schema: {
+        type: 'object',
+        properties: {
+          settings: {
+            type: 'object',
+            properties: {
+              id: { type: 'string', format: 'uuid' },
+              percentage: { type: 'number', description: 'Commission percentage' },
+              min_amount: { type: 'number', description: 'Minimum commission amount' },
+              is_active: { type: 'boolean', description: 'Whether these settings are currently active' },
+              created_at: { type: 'string', format: 'date-time' },
+              updated_at: { type: 'string', format: 'date-time' },
+            },
+          },
+        },
+      },
+    }),
+    ApiResponse({ status: 500, description: 'Internal server error' }),
+  );
+};
+
+export const ApiUpdateCommissionSettings = () => {
+  return applyDecorators(
+    ApiOperation({ summary: 'Update commission settings' }),
+    ApiBody({
+      schema: {
+        type: 'object',
+        properties: {
+          percentage: { type: 'number', description: 'New commission percentage', minimum: 0, maximum: 100 },
+          min_amount: { type: 'number', description: 'New minimum commission amount', minimum: 0 },
+        },
+        required: ['percentage', 'min_amount'],
+      },
+    }),
+    ApiResponse({
+      status: 200,
+      description: 'Commission settings updated successfully',
+      schema: {
+        type: 'object',
+        properties: {
+          settings: {
+            type: 'object',
+            properties: {
+              id: { type: 'string', format: 'uuid' },
+              percentage: { type: 'number' },
+              min_amount: { type: 'number' },
+              is_active: { type: 'boolean' },
+              created_at: { type: 'string', format: 'date-time' },
+              updated_at: { type: 'string', format: 'date-time' },
+            },
+          },
+        },
+      },
+    }),
+    ApiResponse({ status: 400, description: 'Bad request' }),
+    ApiResponse({ status: 403, description: 'Forbidden - Admin access required' }),
+    ApiResponse({ status: 500, description: 'Internal server error' }),
+  );
+};
+
+// Декораторы для Commission Balance
+export const ApiGetCommissionBalance = () => {
+  return applyDecorators(
+    ApiOperation({ summary: 'Get current commission balance' }),
+    ApiResponse({
+      status: 200,
+      description: 'Commission balance retrieved successfully',
+      schema: {
+        type: 'object',
+        properties: {
+          balance: {
+            type: 'object',
+            properties: {
+              id: { type: 'string', format: 'uuid' },
+              amount: { type: 'number', description: 'Current commission balance' },
+              created_at: { type: 'string', format: 'date-time' },
+              updated_at: { type: 'string', format: 'date-time' },
+            },
+          },
+        },
+      },
+    }),
+    ApiResponse({ status: 403, description: 'Forbidden - Admin access required' }),
+    ApiResponse({ status: 500, description: 'Internal server error' }),
+  );
+};
+
+export const ApiWithdrawCommission = () => {
+  return applyDecorators(
+    ApiOperation({ summary: 'Withdraw commission balance' }),
+    ApiBody({
+      schema: {
+        type: 'object',
+        properties: {
+          amount: { type: 'number', description: 'Amount to withdraw', minimum: 0 },
+          admin_id: { type: 'string', format: 'uuid', description: 'ID of the admin performing the withdrawal' },
+        },
+        required: ['amount', 'admin_id'],
+      },
+    }),
+    ApiResponse({
+      status: 200,
+      description: 'Commission withdrawn successfully',
+      schema: {
+        type: 'object',
+        properties: {
+          balance: {
+            type: 'object',
+            properties: {
+              id: { type: 'string', format: 'uuid' },
+              amount: { type: 'number' },
+              created_at: { type: 'string', format: 'date-time' },
+              updated_at: { type: 'string', format: 'date-time' },
+            },
+          },
+          message: { type: 'string' },
+        },
+      },
+    }),
+    ApiResponse({ status: 400, description: 'Bad request - Invalid amount' }),
+    ApiResponse({ status: 403, description: 'Forbidden - Admin access required' }),
+    ApiResponse({ status: 500, description: 'Internal server error' }),
+  );
 }; 

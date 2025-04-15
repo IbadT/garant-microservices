@@ -9,6 +9,7 @@ import { ClientsModule, Transport } from "@nestjs/microservices";
 import { join } from "path";
 import { JwtModule } from "@nestjs/jwt";
 import { ConfigModule, ConfigService } from "@nestjs/config";
+import { CommissionModule } from '../commission/commission.module';
 
 @Module({
     imports: [
@@ -35,8 +36,10 @@ import { ConfigModule, ConfigService } from "@nestjs/config";
             }),
             inject: [ConfigService],
         }),
+        CommissionModule,
     ],
     controllers: [DealController],
-    providers: [PrismaService, DealService, KafkaService, NotificationService, NotificationGateway]
+    providers: [PrismaService, DealService, KafkaService, NotificationService, NotificationGateway],
+    exports: [DealService]
 })
 export class DealModule{}
