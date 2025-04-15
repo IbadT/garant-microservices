@@ -30,7 +30,8 @@ export class SentryExceptionFilter implements ExceptionFilter {
     // Определение статуса и сообщения ошибки
     const status = this.getHttpStatus(exception);
     const message = this.getErrorMessage(exception);
-    const errorResponse = this.createErrorResponse(status, message);
+    const path = request.url.startsWith('/api') ? request.url : `/api${request.url}`;
+    const errorResponse = this.createErrorResponse(status, message, path);
 
     // Логирование ошибки
     this.logError(exception, request, status);
@@ -71,18 +72,18 @@ export class SentryExceptionFilter implements ExceptionFilter {
     if (exception instanceof Error) {
       return exception.message;
     }
-    return 'Внутренняя ошибка сервера';
+    return 'Internal server error';
   }
 
   /**
    * Создание объекта ответа с ошибкой
    */
-  private createErrorResponse(status: number, message: string): object {
+  private createErrorResponse(status: number, message: string, path: string): object {
     return {
       statusCode: status,
       message,
       timestamp: new Date().toISOString(),
-      path: '/',
+      path,
     };
   }
 
@@ -90,23 +91,11 @@ export class SentryExceptionFilter implements ExceptionFilter {
    * Логирование ошибки
    */
   private logError(exception: unknown, request: Request, status: number): void {
-    const errorMessage = this.getErrorMessage(exception);
-    const method = request.method;
-    const url = request.url;
-    const body = JSON.stringify(request.body);
-    const query = JSON.stringify(request.query);
-    const params = JSON.stringify(request.params);
-    const headers = JSON.stringify(request.headers);
-
+    const message = this.getErrorMessage(exception);
+    const path = request.url.startsWith('/api') ? request.url : `/api${request.url}`;
     this.logger.error(
-      `[${method}] ${url} - ${status} - ${errorMessage}`,
-      exception instanceof Error ? exception.stack : '',
-      {
-        body,
-        query,
-        params,
-        headers,
-      },
+      `[${request.method}] ${path} - Status: ${status} - Message: ${message}`,
+      exception instanceof Error ? exception.stack : undefined,
     );
   }
 
@@ -115,8 +104,9 @@ export class SentryExceptionFilter implements ExceptionFilter {
    */
   private sendToSentry(exception: unknown, request: Request, status: number): void {
     // Создание контекста для Sentry
+    const path = request.url.startsWith('/api') ? request.url : `/api${request.url}`;
     const context = {
-      url: request.url,
+      url: path,
       method: request.method,
       headers: request.headers,
       query: request.query,
@@ -128,7 +118,7 @@ export class SentryExceptionFilter implements ExceptionFilter {
     // Установка контекста запроса
     Sentry.setContext('request', context);
     Sentry.setTag('status_code', status.toString());
-    Sentry.setTag('url', request.url);
+    Sentry.setTag('url', path);
     Sentry.setTag('method', request.method);
 
     // Отправка исключения в Sentry

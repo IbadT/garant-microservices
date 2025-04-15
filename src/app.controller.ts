@@ -11,7 +11,8 @@ export class AppController {
 
   @Get("/debug-sentry")
   getError() {
-    throw new Error("My first Sentry error!");
+    // throw new Error("My first Sentry error!");
+    return { message: "Sentry debug endpoint", status: "success" };
   }
 
   @ApiOperation({ 

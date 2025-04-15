@@ -6,12 +6,15 @@ import { NotificationService } from '../notifications/notification.service';
 import { BadRequestException } from '@nestjs/common';
 import { DealStatus, DealInitiator, DisputeStatus, UserRole } from '@prisma/client';
 import { DisputeResolution } from './types/dispute-resolution.enum';
+import { CommissionService } from '../commission/commission.service';
+import { ConfigModule } from '@nestjs/config';
 
 describe('DealService', () => {
   let service: DealService;
   let prismaService: PrismaService;
   let kafkaService: KafkaService;
   let notificationService: NotificationService;
+  let commissionService: CommissionService;
 
   const mockVendor = {
     id: '123e4567-e89b-12d3-a456-426614174000',
@@ -77,28 +80,46 @@ describe('DealService', () => {
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
+      imports: [
+        ConfigModule.forRoot({
+          isGlobal: true,
+          envFilePath: '.env.test',
+        }),
+      ],
       providers: [
         DealService,
         {
           provide: PrismaService,
           useValue: {
-            $transaction: jest.fn().mockImplementation((callback) => callback({
-              deal: {
-                findUnique: jest.fn(),
-                create: jest.fn(),
-                update: jest.fn(),
-                findMany: jest.fn(),
-              },
+            user: {
+              findUnique: jest.fn(),
+              update: jest.fn(),
+            },
+            deal: {
+              create: jest.fn(),
+              findUnique: jest.fn(),
+              update: jest.fn(),
+              findMany: jest.fn(),
+            },
+            dispute: {
+              create: jest.fn(),
+              findUnique: jest.fn(),
+              update: jest.fn(),
+            },
+            $transaction: jest.fn((callback) => callback({
               user: {
                 findUnique: jest.fn(),
                 update: jest.fn(),
-                findFirst: jest.fn(),
+              },
+              deal: {
+                create: jest.fn(),
+                findUnique: jest.fn(),
+                update: jest.fn(),
               },
               dispute: {
                 create: jest.fn(),
                 findUnique: jest.fn(),
                 update: jest.fn(),
-                findMany: jest.fn(),
               },
             })),
           },
@@ -108,13 +129,23 @@ describe('DealService', () => {
           useValue: {
             connect: jest.fn(),
             subscribeToDealUpdates: jest.fn(),
-            sendDealEvent: jest.fn().mockImplementation((event) => Promise.resolve()),
+            publishDealUpdate: jest.fn(),
+            sendDealEvent: jest.fn(),
           },
         },
         {
           provide: NotificationService,
           useValue: {
+            sendNotification: jest.fn(),
             notifyUser: jest.fn(),
+          },
+        },
+        {
+          provide: CommissionService,
+          useValue: {
+            calculateCommission: jest.fn().mockResolvedValue(10),
+            addToCommissionBalance: jest.fn(),
+            refundCommission: jest.fn(),
           },
         },
       ],
@@ -124,6 +155,7 @@ describe('DealService', () => {
     prismaService = module.get<PrismaService>(PrismaService);
     kafkaService = module.get<KafkaService>(KafkaService);
     notificationService = module.get<NotificationService>(NotificationService);
+    commissionService = module.get<CommissionService>(CommissionService);
 
     // Add sendDealEvent method to service
     (service as any).sendDealEvent = jest.fn();

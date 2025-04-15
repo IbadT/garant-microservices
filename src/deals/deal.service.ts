@@ -1,8 +1,7 @@
 import { BadRequestException, Injectable, OnModuleInit } from '@nestjs/common';
-import { PrismaService } from 'src/prisma.service';
+import { PrismaService } from '../prisma.service';
 import { KafkaService } from '../kafka/kafka.service';
-import { NotificationService } from 'src/notifications/notification.service';
-// import { CreateDealRequest } from '../proto/generated/src/proto/garant.pb';
+import { NotificationService } from '../notifications/notification.service';
 import { CreateDealRequest } from '../proto/generated/garant.pb';
 import { DealStatus, DealInitiator, DisputeStatus } from '@prisma/client';
 import { CommissionService } from '../commission/commission.service';

@@ -1,15 +1,15 @@
 import { Module } from "@nestjs/common";
 import { DealController } from "./deal.controller";
-import { PrismaService } from "src/prisma.service";
+import { PrismaService } from "../prisma.service";
 import { DealService } from "./deal.service";
-import { KafkaService } from "src/kafka/kafka.service";
-import { NotificationService } from "src/notifications/notification.service";
-import { NotificationGateway } from "src/notifications/notification.gateway";
+import { KafkaService } from "../kafka/kafka.service";
+import { NotificationService } from "../notifications/notification.service";
+import { NotificationGateway } from "../notifications/notification.gateway";
 import { ClientsModule, Transport } from "@nestjs/microservices";
 import { join } from "path";
 import { JwtModule } from "@nestjs/jwt";
 import { ConfigModule, ConfigService } from "@nestjs/config";
-import { CommissionModule } from '../commission/commission.module';
+import { CommissionModule } from "../commission/commission.module";
 
 @Module({
     imports: [

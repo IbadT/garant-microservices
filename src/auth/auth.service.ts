@@ -1,6 +1,7 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, UnauthorizedException, BadRequestException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { PrismaService } from '../prisma/prisma.service';
+// import { PrismaService } from '../prisma/prisma.service';
+import { PrismaService } from '../prisma.service';
 import { UserRole } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 
@@ -20,7 +21,16 @@ export class AuthService {
     return null;
   }
 
-  async login(user: any) {
+  async login(loginDto: { email: string; password: string }) {
+    if (!loginDto.email || !loginDto.password) {
+      throw new BadRequestException('Email and password are required');
+    }
+
+    const user = await this.validateUser(loginDto.email, loginDto.password);
+    if (!user) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
     const payload = { email: user.email, sub: user.id, role: user.role };
     return {
       access_token: this.jwtService.sign(payload),

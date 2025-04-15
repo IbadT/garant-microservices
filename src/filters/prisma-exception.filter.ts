@@ -7,7 +7,7 @@ import * as Sentry from '@sentry/node';
  * Фильтр исключений для обработки ошибок Prisma
  * Преобразует ошибки Prisma в понятные HTTP-ответы и отправляет их в Sentry
  */
-@Catch()
+@Catch(Prisma.PrismaClientKnownRequestError, Prisma.PrismaClientValidationError)
 export class PrismaExceptionFilter implements ExceptionFilter {
   private readonly logger = new Logger(PrismaExceptionFilter.name);
 

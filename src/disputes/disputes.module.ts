@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { DisputesService } from './disputes.service';
 import { DisputesController } from './disputes.controller';
-import { PrismaService } from 'src/prisma.service';
+import { PrismaService } from '../prisma.service';
 import { ConfigModule } from '@nestjs/config';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 import { join } from 'path';

@@ -9,8 +9,9 @@ import { SentryGlobalFilter } from '@sentry/nestjs/setup';
 import { APP_FILTER } from '@nestjs/core';
 import { PrismaService } from './prisma.service';
 import { ClientModule } from './client/client.module';
-import { PrismaModule } from './prisma/prisma.module';
+// import { PrismaModule } from './prisma/prisma.module';
 import { CommissionModule } from './commission/commission.module';
+import { AuthModule } from './auth/auth.module';
 
 
 @Module({
@@ -22,8 +23,9 @@ import { CommissionModule } from './commission/commission.module';
     DisputesModule,
     DealModule,
     ClientModule,
-    PrismaModule,
+    // PrismaModule,
     CommissionModule,
+    AuthModule,
   ],
   controllers: [AppController],
   providers: [
