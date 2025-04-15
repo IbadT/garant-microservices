@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, OnModuleInit } from '@nestjs/common';
+import { BadRequestException, Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
 import { KafkaService } from '../kafka/kafka.service';
 import { NotificationService } from '../notifications/notification.service';
@@ -19,9 +19,11 @@ enum UserRole {
  * Предоставляет методы для управления сделками в системе
  */
 @Injectable()
-export class DealService implements OnModuleInit {
+export class DealService implements OnModuleInit, OnModuleDestroy {
   private readonly DEAL_AUTO_ACCEPT_TIMEOUT = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
   private readonly DEAL_AUTO_CANCEL_TIMEOUT = 30 * 60 * 1000; // 30 minutes in milliseconds
+  private autoAcceptInterval: NodeJS.Timeout;
+  private autoCancelInterval: NodeJS.Timeout;
 
   /**
    * Создает экземпляр DealService
@@ -39,65 +41,153 @@ export class DealService implements OnModuleInit {
 
   /**
    * Инициализирует сервис при запуске модуля
+   * Подключается к Kafka, подписывается на обновления сделок и запускает проверки автоматического принятия и отмены сделок
    */
   async onModuleInit() {
-    // Сначала подключаемся к Kafka
-    await this.kafka.connect();
-    // Затем подписываемся на обновления
-    await this.kafka.subscribeToDealUpdates(this.handleDealUpdate.bind(this));
-    // Start checking for auto-accept deals
-    this.startAutoAcceptCheck();
-    this.startAutoCancelCheck();
+    try {
+      // Сначала подключаемся к Kafka
+      await this.kafka.connect();
+      // Затем подписываемся на обновления
+      await this.kafka.subscribeToDealUpdates(this.handleDealUpdate.bind(this));
+      // Start checking for auto-accept deals
+      this.startAutoAcceptCheck();
+      this.startAutoCancelCheck();
+      console.log('DealService initialized successfully');
+    } catch (error) {
+      console.error('Failed to initialize DealService:', error);
+      throw error;
+    }
   }
 
+  /**
+   * Очищает ресурсы при завершении работы модуля
+   */
+  async onModuleDestroy() {
+    try {
+      // Очищаем интервалы
+      if (this.autoAcceptInterval) {
+        clearInterval(this.autoAcceptInterval);
+      }
+      if (this.autoCancelInterval) {
+        clearInterval(this.autoCancelInterval);
+      }
+      // Отключаемся от Kafka
+      await this.kafka.disconnect();
+      console.log('DealService destroyed successfully');
+    } catch (error) {
+      console.error('Error during DealService destruction:', error);
+    }
+  }
+
+  /**
+   * Обрабатывает сообщения об обновлениях сделок, полученные из Kafka
+   * @param message - Сообщение из Kafka
+   */
   private async handleDealUpdate(message: any) {
-    // Обработка событий из Kafka
-    console.log('Received Kafka message:', message);
+    try {
+      // Обработка событий из Kafka
+      console.log('Received Kafka message:', message);
+    } catch (error) {
+      console.error('Error handling Kafka message:', error);
+    }
   }
 
-  private async startAutoAcceptCheck() {
-    setInterval(async () => {
-      try {
-        const pendingDeals = await this.prisma.deal.findMany({
-          where: {
-            status: DealStatus.PENDING,
-            initiator: DealInitiator.VENDOR,
-            created_at: {
-              lt: new Date(Date.now() - this.DEAL_AUTO_ACCEPT_TIMEOUT)
+  /**
+   * Запускает периодическую проверку сделок для автоматического принятия
+   * Проверяет сделки, инициированные продавцом, которые находятся в статусе PENDING более 24 часов
+   * и автоматически принимает их от имени покупателя
+   */
+  private startAutoAcceptCheck() {
+    try {
+      // Очищаем предыдущий интервал, если он существует
+      if (this.autoAcceptInterval) {
+        clearInterval(this.autoAcceptInterval);
+      }
+
+      this.autoAcceptInterval = setInterval(async () => {
+        try {
+          console.log('Running auto-accept check...');
+          const pendingDeals = await this.prisma.deal.findMany({
+            where: {
+              status: DealStatus.PENDING,
+              initiator: DealInitiator.VENDOR,
+              created_at: {
+                lt: new Date(Date.now() - this.DEAL_AUTO_ACCEPT_TIMEOUT)
+              }
+            }
+          });
+
+          console.log(`Found ${pendingDeals.length} deals for auto-accept`);
+          for (const deal of pendingDeals) {
+            try {
+              await this.acceptDeal(deal.id, deal.customer_id);
+              console.log(`Auto-accepted deal ${deal.id}`);
+            } catch (error) {
+              console.error(`Error auto-accepting deal ${deal.id}:`, error);
             }
           }
-        });
-
-        for (const deal of pendingDeals) {
-          await this.acceptDeal(deal.id, deal.customer_id);
+        } catch (error) {
+          console.error('Error in auto-accept check:', error);
         }
-      } catch (error) {
-        console.error('Error in auto-accept check:', error);
-      }
-    }, 5 * 60 * 1000); // Check every 5 minutes
+      }, 5 * 60 * 1000); // Check every 5 minutes
+
+      console.log('Auto-accept check started');
+    } catch (error) {
+      console.error('Failed to start auto-accept check:', error);
+    }
   }
 
-  private async startAutoCancelCheck() {
-    setInterval(async () => {
-      try {
-        const pendingDeals = await this.prisma.deal.findMany({
-          where: {
-            status: DealStatus.PENDING,
-            created_at: {
-              lt: new Date(Date.now() - this.DEAL_AUTO_CANCEL_TIMEOUT)
+  /**
+   * Запускает периодическую проверку сделок для автоматической отмены
+   * Проверяет сделки в статусе PENDING, которые не были приняты более 30 минут,
+   * и автоматически отменяет их
+   */
+  private startAutoCancelCheck() {
+    try {
+      // Очищаем предыдущий интервал, если он существует
+      if (this.autoCancelInterval) {
+        clearInterval(this.autoCancelInterval);
+      }
+
+      this.autoCancelInterval = setInterval(async () => {
+        try {
+          console.log('Running auto-cancel check...');
+          const pendingDeals = await this.prisma.deal.findMany({
+            where: {
+              status: DealStatus.PENDING,
+              created_at: {
+                lt: new Date(Date.now() - this.DEAL_AUTO_CANCEL_TIMEOUT)
+              }
+            }
+          });
+
+          console.log(`Found ${pendingDeals.length} deals for auto-cancel`);
+          for (const deal of pendingDeals) {
+            try {
+              await this.cancelDeal(deal.id, 'SYSTEM');
+              console.log(`Auto-cancelled deal ${deal.id}`);
+            } catch (error) {
+              console.error(`Error auto-cancelling deal ${deal.id}:`, error);
             }
           }
-        });
-
-        for (const deal of pendingDeals) {
-          await this.cancelDeal(deal.id, 'SYSTEM');
+        } catch (error) {
+          console.error('Error in auto-cancel check:', error);
         }
-      } catch (error) {
-        console.error('Error in auto-cancel check:', error);
-      }
-    }, 5 * 60 * 1000); // Check every 5 minutes
+      }, 5 * 60 * 1000); // Check every 5 minutes
+
+      console.log('Auto-cancel check started');
+    } catch (error) {
+      console.error('Failed to start auto-cancel check:', error);
+    }
   }
 
+  /**
+   * Создает новую сделку в системе
+   * Если инициатор - покупатель, резервирует средства и комиссию
+   * Если инициатор - продавец, создает сделку без резервирования средств
+   * @param data - Данные для создания сделки
+   * @returns Созданная сделка
+   */
   async createDeal(data: CreateDealRequest) {
     return this.prisma.$transaction(async (tx) => {
       if (data.isCustomerInitiator) {
@@ -117,13 +207,10 @@ export class DealService implements OnModuleInit {
             initiator: DealInitiator.CUSTOMER,
             funds_reserved: true,
             commission_amount: commission,
-            commission_paid: true,
+            commission_paid: false,
             created_at: new Date(),
           }
         });
-
-        // Добавляем комиссию на баланс системы
-        await this.commissionService.addToCommissionBalance(commission);
 
         await this.kafka.sendDealEvent({
           type: 'DEAL_CREATED',
@@ -166,6 +253,13 @@ export class DealService implements OnModuleInit {
     });
   }
 
+  /**
+   * Проверяет достаточность средств у пользователя и резервирует их
+   * @param userId - Идентификатор пользователя
+   * @param amount - Сумма для резервирования
+   * @param prismaTx - Транзакция Prisma (опционально)
+   * @throws {BadRequestException} Если пользователь не найден или недостаточно средств
+   */
   private async validateAndReserveFunds(userId: string, amount: number, prismaTx?: any) {
     const tx = prismaTx || this.prisma;
     
@@ -218,6 +312,15 @@ export class DealService implements OnModuleInit {
     return { isCustomer, isVendor };
   }
 
+  /**
+   * Принимает сделку
+   * Если инициатор - продавец, то покупатель должен принять сделку
+   * Если инициатор - покупатель, то продавец должен принять сделку
+   * @param dealId - Идентификатор сделки
+   * @param userId - Идентификатор пользователя, принимающего сделку
+   * @returns Обновленная сделка
+   * @throws {BadRequestException} Если сделка не найдена или пользователь не имеет прав
+   */
   async acceptDeal(dealId: string, userId: string) {
     return this.prisma.$transaction(async (tx) => {
       const deal = await tx.deal.findUnique({
@@ -231,14 +334,34 @@ export class DealService implements OnModuleInit {
       const { isCustomer, isVendor } = this.validateDealAction(deal, userId, 'accept');
 
       if (deal.initiator === DealInitiator.CUSTOMER && isVendor) {
-        throw new BadRequestException('Only the vendor can accept this deal');
+        const updatedDeal = await tx.deal.update({
+          where: { id: dealId },
+          data: {
+            status: DealStatus.ACTIVE,
+            accepted_at: new Date(),
+            commission_paid: true,
+          }
+        });
+
+        await this.commissionService.addToCommissionBalance(deal.commission_amount);
+
+        await this.kafka.sendDealEvent({
+          type: 'DEAL_ACCEPTED',
+          payload: updatedDeal,
+        });
+
+        await this.notification.notifyUser(deal.customer_id, {
+          type: 'DEAL_ACCEPTED',
+          dealId: deal.id,
+        });
+
+        return updatedDeal;
       }
 
       if (deal.initiator === DealInitiator.VENDOR && isCustomer) {
         const commission = await this.commissionService.calculateCommission(deal.amount);
         const totalAmount = deal.amount + commission;
         
-        // Резервируем средства покупателя включая комиссию
         await this.validateAndReserveFunds(deal.customer_id, totalAmount, tx);
         
         const updatedDeal = await tx.deal.update({
@@ -248,11 +371,10 @@ export class DealService implements OnModuleInit {
             accepted_at: new Date(),
             funds_reserved: true,
             commission_amount: commission,
-            commission_paid: true
+            commission_paid: true,
           }
         });
 
-        // Добавляем комиссию на баланс системы
         await this.commissionService.addToCommissionBalance(commission);
 
         await this.kafka.sendDealEvent({
@@ -268,7 +390,6 @@ export class DealService implements OnModuleInit {
         return updatedDeal;
       }
 
-      // Если инициатор - покупатель, а принимает - продавец
       const updatedDeal = await tx.deal.update({
         where: { id: dealId },
         data: {
@@ -291,6 +412,13 @@ export class DealService implements OnModuleInit {
     });
   }
 
+  /**
+   * Отклоняет сделку
+   * @param dealId - Идентификатор сделки
+   * @param userId - Идентификатор пользователя, отклоняющего сделку
+   * @returns Обновленная сделка
+   * @throws {BadRequestException} Если сделка не найдена или пользователь не имеет прав
+   */
   async declineDeal(dealId: string, userId: string) {
     return this.prisma.$transaction(async (tx) => {
       const deal = await tx.deal.findUnique({
@@ -301,19 +429,11 @@ export class DealService implements OnModuleInit {
         throw new BadRequestException('Deal not found');
       }
 
-      const { isCustomer, isVendor } = this.validateDealAction(deal, userId, 'decline');
+      this.validateDealAction(deal, userId, 'decline');
 
-      // Определяем, кто отклоняет сделку
-      const declinedBy = isCustomer ? 'CUSTOMER' : 'VENDOR';
-
-      // Если комиссия была уплачена, возвращаем её
-      if (deal.commission_paid) {
-        await this.commissionService.refundCommission(dealId);
-      }
-
-      // Если инициатор - покупатель, а отклоняет - продавец, то возвращаем средства
-      if (deal.initiator === DealInitiator.CUSTOMER && isVendor && deal.funds_reserved) {
-        await this.releaseFunds(deal.customer_id, deal.amount, tx);
+      // Если средства были зарезервированы, возвращаем их
+      if (deal.funds_reserved) {
+        await this.releaseFunds(deal.customer_id, deal.amount + (deal.commission_amount || 0), tx);
       }
 
       const updatedDeal = await tx.deal.update({
@@ -321,7 +441,6 @@ export class DealService implements OnModuleInit {
         data: {
           status: DealStatus.DECLINED,
           declined_at: new Date(),
-          declined_by: declinedBy,
         }
       });
 
@@ -330,18 +449,24 @@ export class DealService implements OnModuleInit {
         payload: updatedDeal,
       });
 
-      await this.notification.notifyUser(
-        isCustomer ? deal.vendor_id : deal.customer_id,
-        {
-          type: 'DEAL_DECLINED',
-          dealId: deal.id,
-        }
-      );
+      // Уведомляем другую сторону
+      const notifyUserId = deal.customer_id === userId ? deal.vendor_id : deal.customer_id;
+      await this.notification.notifyUser(notifyUserId, {
+        type: 'DEAL_DECLINED',
+        dealId: deal.id,
+      });
 
       return updatedDeal;
     });
   }
 
+  /**
+   * Отменяет сделку
+   * @param dealId - Идентификатор сделки
+   * @param userId - Идентификатор пользователя, отменяющего сделку
+   * @returns Обновленная сделка
+   * @throws {BadRequestException} Если сделка не найдена или пользователь не имеет прав
+   */
   async cancelDeal(dealId: string, userId: string) {
     return this.prisma.$transaction(async (tx) => {
       const deal = await tx.deal.findUnique({
@@ -352,19 +477,14 @@ export class DealService implements OnModuleInit {
         throw new BadRequestException('Deal not found');
       }
 
-      const { isCustomer, isVendor } = this.validateDealAction(deal, userId, 'cancel');
-
-      // Определяем, кто отменяет сделку
-      const cancelledBy = isCustomer ? 'CUSTOMER' : 'VENDOR';
-
-      // Если комиссия была уплачена, возвращаем её
-      if (deal.commission_paid) {
-        await this.commissionService.refundCommission(dealId);
+      // Если отмена системой, пропускаем проверку
+      if (userId !== 'SYSTEM') {
+        this.validateDealAction(deal, userId, 'cancel');
       }
 
       // Если средства были зарезервированы, возвращаем их
       if (deal.funds_reserved) {
-        await this.releaseFunds(deal.customer_id, deal.amount, tx);
+        await this.releaseFunds(deal.customer_id, deal.amount + (deal.commission_amount || 0), tx);
       }
 
       const updatedDeal = await tx.deal.update({
@@ -372,7 +492,6 @@ export class DealService implements OnModuleInit {
         data: {
           status: DealStatus.CANCELLED,
           cancelled_at: new Date(),
-          cancelled_by: cancelledBy,
         }
       });
 
@@ -381,18 +500,28 @@ export class DealService implements OnModuleInit {
         payload: updatedDeal,
       });
 
-      await this.notification.notifyUser(
-        isCustomer ? deal.vendor_id : deal.customer_id,
-        {
-          type: 'DEAL_CANCELLED',
-          dealId: deal.id,
-        }
-      );
+      // Уведомляем обе стороны
+      await this.notification.notifyUser(deal.customer_id, {
+        type: 'DEAL_CANCELLED',
+        dealId: deal.id,
+      });
+
+      await this.notification.notifyUser(deal.vendor_id, {
+        type: 'DEAL_CANCELLED',
+        dealId: deal.id,
+      });
 
       return updatedDeal;
     });
   }
 
+  /**
+   * Подтверждает завершение сделки
+   * @param dealId - Идентификатор сделки
+   * @param userId - Идентификатор пользователя, подтверждающего завершение
+   * @returns Обновленная сделка
+   * @throws {BadRequestException} Если сделка не найдена или пользователь не имеет прав
+   */
   async confirmCompletion(dealId: string, userId: string) {
     return this.prisma.$transaction(async (tx) => {
       const deal = await tx.deal.findUnique({
@@ -403,27 +532,26 @@ export class DealService implements OnModuleInit {
         throw new BadRequestException('Deal not found');
       }
 
+      const { isCustomer } = this.validateDealAction(deal, userId, 'confirm');
+
+      if (!isCustomer) {
+        throw new BadRequestException('Only the customer can confirm completion');
+      }
+
       if (deal.status !== DealStatus.ACTIVE) {
         throw new BadRequestException('Can only confirm completion of an active deal');
       }
-
-      const { isCustomer, isVendor } = this.validateDealAction(deal, userId, 'confirm completion');
-
-      // Только покупатель может подтвердить завершение сделки
-      if (!isCustomer) {
-        throw new BadRequestException('Only the customer can confirm deal completion');
-      }
-
-      // Переводим средства продавцу
-      await this.transferFundsToVendor(deal, tx);
 
       const updatedDeal = await tx.deal.update({
         where: { id: dealId },
         data: {
           status: DealStatus.COMPLETED,
           completed_at: new Date(),
-        },
+        }
       });
+
+      // Переводим средства продавцу
+      await this.transferFundsToVendor(updatedDeal, tx);
 
       await this.kafka.sendDealEvent({
         type: 'DEAL_COMPLETED',
@@ -440,11 +568,10 @@ export class DealService implements OnModuleInit {
   }
 
   /**
-   * Освобождает зарезервированные средства
+   * Освобождает зарезервированные средства пользователя
    * @param userId - Идентификатор пользователя
-   * @param amount - Сумма
-   * @param tx - Транзакция
-   * @returns {Promise<void>}
+   * @param amount - Сумма для освобождения
+   * @param prismaTx - Транзакция Prisma (опционально)
    */
   private async releaseFunds(userId: string, amount: number, prismaTx?: any) {
     const tx = prismaTx || this.prisma;
@@ -453,73 +580,77 @@ export class DealService implements OnModuleInit {
       where: { id: userId },
       data: {
         balance: {
-          increment: amount,
+          increment: amount
         },
         reserved_balance: {
-          decrement: amount,
-        },
-      },
+          decrement: amount
+        }
+      }
     });
   }
 
   /**
-   * Переводит средства продавцу
+   * Переводит средства от покупателя к продавцу
    * @param deal - Сделка
-   * @param tx - Транзакция
-   * @returns {Promise<void>}
+   * @param prismaTx - Транзакция Prisma (опционально)
    */
   private async transferFundsToVendor(deal: any, prismaTx?: any) {
     const tx = prismaTx || this.prisma;
     
-    // Снимаем средства с зарезервированного баланса покупателя
-    await tx.user.update({
-      where: { id: deal.customer_id },
-      data: {
-        reserved_balance: {
-          decrement: deal.amount,
-        },
-      },
-    });
-
-    // Добавляем средства на баланс продавца
+    // Переводим средства продавцу
     await tx.user.update({
       where: { id: deal.vendor_id },
       data: {
         balance: {
-          increment: deal.amount,
-        },
-      },
+          increment: deal.amount
+        }
+      }
+    });
+
+    // Освобождаем зарезервированные средства покупателя
+    await tx.user.update({
+      where: { id: deal.customer_id },
+      data: {
+        reserved_balance: {
+          decrement: deal.amount + (deal.commission_amount || 0)
+        }
+      }
     });
   }
 
   /**
    * Открывает спор по сделке
    * @param dealId - Идентификатор сделки
-   * @param userId - Идентификатор пользователя
-   * @param reason - Причина открытия спора
-   * @returns {Promise<{deal: any, dispute: any}>} Результат открытия спора
-   * @throws {BadRequestException} Если сделка не найдена или уже есть активный спор
+   * @param userId - Идентификатор пользователя, открывающего спор
+   * @param reason - Причина спора
+   * @returns Созданный спор
+   * @throws {BadRequestException} Если сделка не найдена или пользователь не имеет прав
    */
   async openDispute(dealId: string, userId: string, reason: string) {
     return this.prisma.$transaction(async (tx) => {
       const deal = await tx.deal.findUnique({
         where: { id: dealId },
-        include: { disputes: true },
       });
 
       if (!deal) {
         throw new BadRequestException('Deal not found');
       }
 
-      const { isCustomer, isVendor } = this.validateDealAction(deal, userId, 'dispute');
+      const { isCustomer } = this.validateDealAction(deal, userId, 'dispute');
 
-      // Check if there's already an active dispute
-      const activeDispute = deal.disputes.find(d => d.status === DisputeStatus.PENDING);
-      if (activeDispute) {
-        throw new BadRequestException('There is already an active dispute for this deal');
+      // Проверяем, нет ли уже открытого спора
+      const existingDispute = await tx.dispute.findFirst({
+        where: {
+          deal_id: dealId,
+          status: DisputeStatus.PENDING
+        }
+      });
+
+      if (existingDispute) {
+        throw new BadRequestException('Dispute already exists for this deal');
       }
 
-      // Create new dispute
+      // Создаем спор
       const dispute = await tx.dispute.create({
         data: {
           deal_id: dealId,
@@ -528,31 +659,31 @@ export class DealService implements OnModuleInit {
           reason: reason,
           status: DisputeStatus.PENDING,
           created_at: new Date(),
-        },
+        }
       });
 
-      // Update deal status
-      const updatedDeal = await tx.deal.update({
+      // Обновляем статус сделки
+      await tx.deal.update({
         where: { id: dealId },
         data: {
           status: DealStatus.DISPUTED,
-        },
+        }
       });
 
       await this.kafka.sendDealEvent({
         type: 'DISPUTE_OPENED',
-        payload: { deal: updatedDeal, dispute },
+        payload: { deal, dispute },
       });
 
-      // Notify the other party
-      const notifyUserId = isCustomer ? deal.vendor_id : deal.customer_id;
+      // Уведомляем другую сторону
+      const notifyUserId = deal.customer_id === userId ? deal.vendor_id : deal.customer_id;
       await this.notification.notifyUser(notifyUserId, {
         type: 'DISPUTE_OPENED',
         dealId: deal.id,
         disputeId: dispute.id,
       });
 
-      return { deal: updatedDeal, dispute };
+      return dispute;
     });
   }
 
@@ -560,167 +691,196 @@ export class DealService implements OnModuleInit {
    * Разрешает спор по сделке
    * @param dealId - Идентификатор сделки
    * @param disputeId - Идентификатор спора
-   * @param resolution - Решение по спору
-   * @param moderatorId - Идентификатор модератора
-   * @returns {Promise<{deal: any, dispute: any}>} Результат разрешения спора
-   * @throws {BadRequestException} Если спор не найден, уже разрешен или пользователь не является модератором
+   * @param resolution - Решение по спору (REFUND, RELEASE, PARTIAL_REFUND)
+   * @param moderatorId - Идентификатор модератора, разрешающего спор
+   * @returns Обновленный спор
+   * @throws {BadRequestException} Если сделка или спор не найдены
    */
   async resolveDispute(dealId: string, disputeId: string, resolution: string, moderatorId: string) {
     return this.prisma.$transaction(async (tx) => {
       const deal = await tx.deal.findUnique({
         where: { id: dealId },
-        include: { disputes: true },
       });
 
       if (!deal) {
         throw new BadRequestException('Deal not found');
       }
 
-      const dispute = deal.disputes.find(d => d.id === disputeId);
+      const dispute = await tx.dispute.findUnique({
+        where: { id: disputeId },
+      });
+
       if (!dispute) {
         throw new BadRequestException('Dispute not found');
       }
 
-      if (dispute.status !== DisputeStatus.PENDING) {
-        throw new BadRequestException('Dispute is not active');
+      if (dispute.deal_id !== dealId) {
+        throw new BadRequestException('Dispute does not belong to this deal');
       }
 
-      // Update dispute status
-      await tx.dispute.update({
+      if (dispute.status !== DisputeStatus.PENDING) {
+        throw new BadRequestException('Dispute is not open');
+      }
+
+      // Обрабатываем решение в зависимости от типа
+      if (resolution === 'REFUND') {
+        // Возвращаем средства покупателю
+        await this.releaseFunds(deal.customer_id, deal.amount + (deal.commission_amount || 0), tx);
+        
+        // Возвращаем комиссию
+        if (deal.commission_amount) {
+          await this.commissionService.refundCommission(deal.commission_amount.toString());
+        }
+      } else if (resolution === 'RELEASE') {
+        // Переводим средства продавцу
+        await this.transferFundsToVendor(deal, tx);
+      } else if (resolution === 'PARTIAL_REFUND') {
+        // Частичный возврат (например, 50% суммы)
+        const refundAmount = deal.amount / 2;
+        const commissionRefund = deal.commission_amount ? deal.commission_amount / 2 : 0;
+        
+        await this.releaseFunds(deal.customer_id, refundAmount + commissionRefund, tx);
+        
+        // Переводим оставшуюся часть продавцу
+        await tx.user.update({
+          where: { id: deal.vendor_id },
+          data: {
+            balance: {
+              increment: deal.amount - refundAmount
+            }
+          }
+        });
+        
+        // Освобождаем зарезервированные средства покупателя
+        await tx.user.update({
+          where: { id: deal.customer_id },
+          data: {
+            reserved_balance: {
+              decrement: deal.amount + (deal.commission_amount || 0)
+            }
+          }
+        });
+        
+        // Возвращаем часть комиссии
+        if (commissionRefund > 0) {
+          await this.commissionService.refundCommission(commissionRefund.toString());
+        }
+      }
+
+      // Обновляем статус спора
+      const updatedDispute = await tx.dispute.update({
         where: { id: disputeId },
         data: {
           status: DisputeStatus.RESOLVED,
           resolution: resolution,
           resolved_at: new Date(),
-        },
+        }
       });
 
-      // Handle funds based on resolution
-      if (resolution === 'VENDOR_WIN') {
-        await this.transferFundsToVendor(deal, tx);
-      } else if (resolution === 'CUSTOMER_WIN' && deal.funds_reserved) {
-        await this.releaseFunds(deal.customer_id, deal.amount, tx);
-      }
-
-      // Update deal status
+      // Обновляем статус сделки
       const updatedDeal = await tx.deal.update({
         where: { id: dealId },
         data: {
           status: DealStatus.COMPLETED,
           completed_at: new Date(),
-        },
+        }
       });
 
       await this.kafka.sendDealEvent({
         type: 'DISPUTE_RESOLVED',
-        payload: { deal: updatedDeal, dispute },
+        payload: { deal: updatedDeal, dispute: updatedDispute },
       });
 
-      // Notify both parties
+      // Уведомляем обе стороны
       await this.notification.notifyUser(deal.customer_id, {
         type: 'DISPUTE_RESOLVED',
         dealId: deal.id,
         disputeId: dispute.id,
-        resolution,
+        resolution: resolution,
       });
 
       await this.notification.notifyUser(deal.vendor_id, {
         type: 'DISPUTE_RESOLVED',
         dealId: deal.id,
         disputeId: dispute.id,
-        resolution,
+        resolution: resolution,
       });
 
-      return { deal: updatedDeal, dispute };
+      return updatedDispute;
     });
   }
 
+  /**
+   * Получает активные сделки пользователя
+   * @param userId - Идентификатор пользователя
+   * @returns Массив активных сделок пользователя
+   */
   async getActiveDeals(userId: string) {
-    // Получаем все сделки, кроме тех, что имеют статус CANCELLED / DECLINED / FINISHED
-    // или получили этот статус более 24 часов назад
-    const twentyFourHoursAgo = new Date();
-    twentyFourHoursAgo.setHours(twentyFourHoursAgo.getHours() - 24);
-
     return this.prisma.deal.findMany({
       where: {
         OR: [
-          {
-            customer_id: userId,
-          },
-          {
-            vendor_id: userId,
-          },
+          { customer_id: userId },
+          { vendor_id: userId }
         ],
-        AND: [
-          {
-            OR: [
-              {
-                status: {
-                  in: [DealStatus.PENDING, DealStatus.ACTIVE, DealStatus.DISPUTED],
-                },
-              },
-              {
-                AND: [
-                  {
-                    status: {
-                      in: [DealStatus.CANCELLED, DealStatus.DECLINED, DealStatus.COMPLETED],
-                    },
-                  },
-                  {
-                    OR: [
-                      {
-                        cancelled_at: {
-                          gt: twentyFourHoursAgo,
-                        },
-                      },
-                      {
-                        declined_at: {
-                          gt: twentyFourHoursAgo,
-                        },
-                      },
-                      {
-                        completed_at: {
-                          gt: twentyFourHoursAgo,
-                        },
-                      },
-                    ],
-                  },
-                ],
-              },
-            ],
-          },
-        ],
+        status: {
+          in: [DealStatus.ACTIVE, DealStatus.PENDING]
+        }
       },
       include: {
-        disputes: {
-          orderBy: {
-            created_at: 'desc',
-          },
-          take: 1,
+        customer: {
+          select: {
+            id: true,
+            email: true,
+          }
         },
+        vendor: {
+          select: {
+            id: true,
+            email: true,
+          }
+        },
+        disputes: {
+          where: {
+            status: DisputeStatus.PENDING
+          }
+        }
       },
       orderBy: {
-        created_at: 'desc',
-      },
+        created_at: 'desc'
+      }
     });
   }
 
   /**
    * Получает сделку по идентификатору
    * @param dealId - Идентификатор сделки
-   * @returns {Promise<any>} Найденная сделка
+   * @returns Сделка с включенными данными о покупателе, продавце и спорах
+   * @throws {BadRequestException} Если сделка не найдена
    */
   async getDealById(dealId: string) {
-    return this.prisma.deal.findUnique({
+    const deal = await this.prisma.deal.findUnique({
       where: { id: dealId },
       include: {
-        disputes: {
-          orderBy: {
-            created_at: 'desc',
-          },
-          take: 1,
+        customer: {
+          select: {
+            id: true,
+            email: true,
+          }
         },
-      },
+        vendor: {
+          select: {
+            id: true,
+            email: true,
+          }
+        },
+        disputes: true
+      }
     });
+
+    if (!deal) {
+      throw new BadRequestException('Deal not found');
+    }
+
+    return deal;
   }
 }

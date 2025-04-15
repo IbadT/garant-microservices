@@ -1,6 +1,6 @@
 import { Controller, Get, Post, Body, UseGuards, Param, Put } from '@nestjs/common';
 import { CommissionService } from './commission.service';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiSecurity } from '@nestjs/swagger';
 import { UpdateCommissionSettingsDto } from './dto/update-settings.dto';
 import { WithdrawCommissionDto } from './dto/withdraw-commission.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -8,6 +8,7 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { UserRole } from '@prisma/client';
 
+@ApiSecurity('JWT-auth')
 @ApiTags('commission')
 @Controller('commission')
 @UseGuards(JwtAuthGuard, RolesGuard)

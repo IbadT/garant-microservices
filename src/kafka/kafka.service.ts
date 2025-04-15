@@ -56,6 +56,24 @@ export class KafkaService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
+   * Отключается от Kafka
+   * Отключает producer и consumer
+   * @throws {Error} Если не удалось отключиться от Kafka
+   */
+  async disconnect() {
+    try {
+      await this.producer.disconnect();
+      this.logger.log('Kafka producer disconnected');
+      
+      await this.consumer.disconnect();
+      this.logger.log('Kafka consumer disconnected');
+    } catch (error) {
+      this.logger.error(`Error disconnecting from Kafka: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
    * Отправляет событие в Kafka
    * @param event - Объект события с типом и полезной нагрузкой
    * @throws {Error} Если не удалось отправить событие
@@ -115,14 +133,6 @@ export class KafkaService implements OnModuleInit, OnModuleDestroy {
    * Отключается от Kafka при завершении работы модуля
    */
   async onModuleDestroy() {
-    try {
-      await this.producer.disconnect();
-      this.logger.log('Kafka producer disconnected');
-      
-      await this.consumer.disconnect();
-      this.logger.log('Kafka consumer disconnected');
-    } catch (error) {
-      this.logger.error(`Error disconnecting from Kafka: ${error.message}`);
-    }
+    await this.disconnect();
   }
 }

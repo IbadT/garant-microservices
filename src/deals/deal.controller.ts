@@ -17,7 +17,6 @@ import {
   ResolveDisputeRequest,
   SendHelloRequest,
   SendHelloResponse,
-// } from '../proto/generated/src/proto/garant.pb';
 } from '../proto/generated/garant.pb';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { SendHelloDto } from './dto/send-hello.dto';
@@ -226,8 +225,8 @@ export class DealController {
       
       const result = await this.dealService.openDispute(data.dealId, data.userId, data.reason);
       return {
-        id: result.dispute.id,
-        status: result.dispute.status,
+        id: result.id,
+        status: result.status,
         message: 'Dispute opened successfully'
       };
     } catch (error) {
@@ -269,8 +268,8 @@ export class DealController {
         data.moderatorId
       );
       return {
-        id: result.dispute.id,
-        status: result.dispute.status,
+        id: result.id,
+        status: result.status,
         message: 'Dispute resolved successfully'
       };
     } catch (error) {
