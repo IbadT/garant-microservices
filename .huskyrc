@@ -1,0 +1,9 @@
+{
+  "hooks": {
+    "pre-commit": "npm run lint && npm run format && npm run proto:gen",
+    "pre-push": "npm run test && npm run build",
+    "commit-msg": "node scripts/validate-commit-msg.js",
+    "prepare-commit-msg": "node scripts/prepare-commit-msg.js",
+    "post-merge": "node scripts/post-merge.js"
+  }
+} 

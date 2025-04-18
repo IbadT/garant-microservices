@@ -1,0 +1,166 @@
+syntax = "proto3";
+
+package garant;
+
+// Deal Service
+service DealService {
+  rpc CreateDeal (CreateDealRequest) returns (DealResponse);
+  rpc AcceptDeal (AcceptDealRequest) returns (DealResponse);
+  rpc DeclineDeal (DeclineDealRequest) returns (DealResponse);
+  rpc CancelDeal (CancelDealRequest) returns (DealResponse);
+  rpc ConfirmCompletion (ConfirmCompletionRequest) returns (DealResponse);
+  rpc OpenDealDispute (OpenDealDisputeRequest) returns (DealResponse);
+  rpc ResolveDealDispute (ResolveDealDisputeRequest) returns (DealResponse);
+  rpc GetActiveDeals (GetActiveDealsRequest) returns (GetActiveDealsResponse);
+  rpc GetDealById (GetDealByIdRequest) returns (GetDealByIdResponse);
+  rpc SendHello (SendHelloRequest) returns (SendHelloResponse);
+}
+
+// Disputes Service
+service DisputesService {
+  rpc OpenDispute (OpenDisputeRequest) returns (DisputeResponse);
+  rpc ResolveDispute (ResolveDisputeRequest) returns (DisputeResponse);
+  rpc GetDisputeById (GetDisputeByIdRequest) returns (GetDisputeByIdResponse);
+  rpc GetDisputesByDealId (GetDisputesByDealIdRequest) returns (GetDisputesByDealIdResponse);
+}
+
+// Common Messages
+message SendHelloRequest {
+  string message = 1;
+}
+
+message SendHelloResponse {
+  string message = 1;
+}
+
+// Deal Service Messages
+message CreateDealRequest {
+  string initiator_id = 1;
+  string target_id = 2;
+  double amount = 3;
+  string description = 4;
+  bool is_customer_initiator = 5;
+}
+
+message AcceptDealRequest {
+  string deal_id = 1;
+  string user_id = 2;
+}
+
+message DeclineDealRequest {
+  string deal_id = 1;
+  string user_id = 2;
+}
+
+message DealResponse {
+  string id = 1;
+  string status = 2;
+  string message = 3;
+}
+
+message CancelDealRequest {
+  string deal_id = 1;
+  string user_id = 2;
+}
+
+message ConfirmCompletionRequest {
+  string deal_id = 1;
+  string user_id = 2;
+}
+
+message OpenDealDisputeRequest {
+  string deal_id = 1;
+  string user_id = 2;
+  string reason = 3;
+}
+
+message ResolveDealDisputeRequest {
+  string deal_id = 1;
+  string dispute_id = 2;
+  string resolution = 3;
+  string moderator_id = 4;
+}
+
+message GetActiveDealsRequest {
+  string user_id = 1;
+}
+
+message GetActiveDealsResponse {
+  repeated Deal deals = 1;
+}
+
+message GetDealByIdRequest {
+  string deal_id = 1;
+}
+
+message GetDealByIdResponse {
+  Deal deal = 1;
+}
+
+message Deal {
+  string id = 1;
+  string customer_id = 2;
+  string vendor_id = 3;
+  double amount = 4;
+  string description = 5;
+  string status = 6;
+  string initiator = 7;
+  bool funds_reserved = 8;
+  string created_at = 9;
+  string accepted_at = 10;
+  string completed_at = 11;
+  string cancelled_at = 12;
+  string cancelled_by = 13;
+  string declined_at = 14;
+  string declined_by = 15;
+  Dispute last_dispute = 16;
+}
+
+// Disputes Service Messages
+message OpenDisputeRequest {
+  string dealId = 1;
+  string userId = 2;
+  string reason = 3;
+}
+
+message ResolveDisputeRequest {
+  string dealId = 1;
+  string disputeId = 2;
+  string resolution = 3;
+  string moderatorId = 4;
+}
+
+message GetDisputeByIdRequest {
+  string disputeId = 1;
+}
+
+message GetDisputesByDealIdRequest {
+  string dealId = 1;
+}
+
+message DisputeResponse {
+  string id = 1;
+  string status = 2;
+  string message = 3;
+}
+
+message Dispute {
+  string id = 1;
+  string deal_id = 2;
+  string opened_by = 3;
+  string opened_by_role = 4;
+  string reason = 5;
+  string status = 6;
+  string resolved_at = 7;
+  string resolution = 8;
+  string created_at = 9;
+  string updated_at = 10;
+}
+
+message GetDisputeByIdResponse {
+  Dispute dispute = 1;
+}
+
+message GetDisputesByDealIdResponse {
+  repeated Dispute disputes = 1;
+} 

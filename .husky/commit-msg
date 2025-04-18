@@ -1,0 +1,16 @@
+#!/bin/sh
+. "$(dirname "$0")/_/husky.sh"
+
+# Получение сообщения коммита
+commit_msg=$(cat "$1")
+
+# Проверка формата сообщения коммита
+# Формат: <тип>(<область>): <описание>
+# Типы: feat, fix, docs, style, refactor, test, chore
+if ! echo "$commit_msg" | grep -qE '^(feat|fix|docs|style|refactor|test|chore)(\([a-z-]+\))?: .+'; then
+  echo "Error: Invalid commit message format."
+  echo "Expected format: <type>(<scope>): <description>"
+  echo "Types: feat, fix, docs, style, refactor, test, chore"
+  echo "Example: feat(auth): add login functionality"
+  exit 1
+fi 
